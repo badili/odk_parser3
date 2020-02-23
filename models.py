@@ -136,6 +136,7 @@ class SystemSettings(BaseTable):
     setting_name = models.CharField(max_length=200)
     setting_key = models.CharField(max_length=100, unique=True)
     setting_value = models.CharField(max_length=1000)
+    parent_id = models.CharField(max_length=20, null=True, blank=True)      # an optional placeholder to link to a parent model, not necessary in this app
 
     class Meta:
         db_table = 'system_settings'
