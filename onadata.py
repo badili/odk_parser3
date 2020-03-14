@@ -2,10 +2,13 @@ import requests
 import traceback
 
 from cryptography.fernet import Fernet
+from django.conf import settings
+from raven import Client
 
 from .terminal_output import Terminal
-terminal = Terminal()
 
+terminal = Terminal()
+sentry = Client(settings.SENTRY_DSN)
 
 class Onadata():
     """
