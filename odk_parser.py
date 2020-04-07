@@ -55,7 +55,7 @@ request = HttpRequest()
 
 
 class OdkParser():
-    def __init__(self):
+    def __init__(self, ona_user=None, ona_password=None, ona_token=None):
         terminal.tprint("Initializing the core ODK parser", 'ok')
 
         global sentry
@@ -68,8 +68,14 @@ class OdkParser():
         self.form_rep = 'api/v1/forms/'
         self.media = 'api/v1/media'
 
-        # load the ona settings
-        self.load_ona_settings()
+        if ona_token is None:
+            # load the global ona settings
+            self.load_ona_settings()
+        else:
+            self.ona_user = ona_user
+            self.ona_password = ona_password
+            self.ona_api_token = ona_token
+            self.ona_url = settings.ONADATA_URL
 
         # load the destination database
         self.load_mapped_connection()

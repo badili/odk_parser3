@@ -27,7 +27,6 @@ class Onadata():
         self.media = 'api/v1/media'
         self.metadata_uri = 'api/v1/metadata'
 
-
     def process_curl_request(self, url):
         """
         Create and execute a curl request
@@ -46,7 +45,6 @@ class Onadata():
             terminal.tprint(str(e), 'fail')
             sentry.captureException()
             raise Exception('There was an error while processing an Onadata request')
-
 
     def register_new_profile(self, user_details):
         """
