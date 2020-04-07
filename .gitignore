@@ -101,4 +101,3 @@ ENV/
 .mypy_cache/
 
 odk_parser.py.bak
-migrations
