@@ -168,7 +168,7 @@ class OdkParser():
                 sentry.captureException()
                 return "Unknown (%s)" % t_key
 
-    def refresh_forms(self):
+    def refresh_forms(self, process_structure=False, auto_create_form_group=False):
         """
         Refresh the list of forms in the database
         """
@@ -203,7 +203,13 @@ class OdkParser():
             except ODKForm.DoesNotExist as e:
                 # this form is not saved in the database, so save it
                 terminal.tprint("The form '%s' is not in the database, saving it" % form['id_string'], 'warn')
-                form_group = None
+                if auto_create_form_group:
+                    form_group = self.auto_create_form_group(form['id_string'])
+                    if form_group is None:
+                        # we have been asked to create a group if it doesn't exist but encountered an error! I just cant go on, I refuse
+                        raise Exception("There was an error while creating an automatic form group, which was needed!")
+                else:
+                    form_group = None
 
                 cur_form = ODKForm(
                     form_id=form['formid'],
@@ -214,6 +220,16 @@ class OdkParser():
                     is_source_deleted=False
                 )
                 cur_form.publish()
+
+                if process_structure:
+                    # we to process and save the form structure
+                    # we need to have the cur_form_group set for this operation
+                    if form_group is None:
+                        raise Exception("Refusing to process the form structure for '%s' since the form group is not defined. This process will fail downstream." % form['id_string'])
+
+                    self.cur_form_group = form_group.id
+                    self.get_form_structure_from_server(form['formid'])
+
                 to_return.append({'title': form['title'], 'id': form['formid']})
             except Exception as e:
                 sentry.captureException()
@@ -432,29 +448,34 @@ class OdkParser():
         """
         Get the structure of the current form
         """
-        url = "%s%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
-        terminal.tprint("Fetching the form structure for form with id = %d" % form_id, 'header')
-        form_structure = self.process_curl_request(url)
+        try:
+            url = "%s%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
+            terminal.tprint("Fetching the form structure for form with id = %d" % form_id, 'header')
+            form_structure = self.process_curl_request(url)
 
-        if form_structure is None:
-            return (None, None)
+            if form_structure is None:
+                return (None, None)
 
-        self.cur_node_id = 0
-        self.cur_form_id = form_id
-        self.repeat_level = 0
-        self.all_nodes = []
-        self.top_node = {"name": "Main", "label": "Top Level", "parent_id": -1, "type": "top_level", "id": 0}
+            self.cur_node_id = 0
+            self.cur_form_id = form_id
+            self.repeat_level = 0
+            self.all_nodes = []
+            self.top_node = {"name": "Main", "label": "Top Level", "parent_id": -1, "type": "top_level", "id": 0}
 
-        # initialize a current section variable if we are to group them
-        self.cur_section = None
+            # initialize a current section variable if we are to group them
+            self.cur_section = None
 
-        self.top_level_hierarchy = self.extract_repeating_groups(form_structure, 0, True)
-        self.all_nodes.insert(0, self.top_node)
-        terminal.tprint("Processed %d group nodes" % self.cur_node_id, 'warn')
+            self.top_level_hierarchy = self.extract_repeating_groups(form_structure, 0, True)
+            self.all_nodes.insert(0, self.top_node)
+            terminal.tprint("Processed %d group nodes" % self.cur_node_id, 'warn')
 
-        # print all the json for creating the tree
-        # terminal.tprint(json.dumps(self.all_nodes), 'warn')
-        return self.all_nodes, form_structure
+            # print all the json for creating the tree
+            # terminal.tprint(json.dumps(self.all_nodes), 'warn')
+            return self.all_nodes, form_structure
+        except Exception as e:
+            sentry.captureException()
+            terminal.tprint(str(e), 'fail')
+            raise
 
     def extract_repeating_groups(self, nodes, parent_id, use_sections=False):
         """
@@ -2897,3 +2918,29 @@ class OdkParser():
         except Exception as e:
             terminal.tprint(str(e), 'fail')
             return True, 'There was an error while saving the group settings'
+
+    def auto_create_form_group(self, full_form_id):
+        # we are expecting the full form id to have the version number at the end separated with an underscore
+        # eg. my_awesome_name_v1, my_awesome_name_v14
+        # we process this and extract the my_awesome_name as form name
+        try:
+            if re.match('^(.+)(_v\d+)(_\d+)?$', full_form_id) is None:
+                raise ValueError("The supplied form id '%s' doesn't conform to the expected pattern like 'my_awesome_name_v14' or 'my_awesome_name_v14_2'" % full_form_id)
+
+            form_group_name = re.findall('^(.+)(_v\d+)(_\d+)?$', full_form_id)[0][0]
+
+            # check if the group exists first before saving it
+            group = ODKFormGroup.objects.filter(group_name=form_group_name).first()
+            if group is None:
+                group = ODKFormGroup(
+                    order_index=None,
+                    group_name=form_group_name,
+                    comments="Auto created from '%s'" % full_form_id
+                )
+                group.publish()
+            return group
+
+        except Exception as e:
+            terminal.tprint(str(e), 'ok')
+            sentry.captureException()
+            return None
