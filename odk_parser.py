@@ -154,19 +154,19 @@ class OdkParser():
         return to_return
 
     def get_value_from_dictionary(self, t_key):
-        query = """
-            SELECT t_value from dictionary_items where t_key = '%s'
-        """ % t_key
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            t_value = cursor.fetchall()
-            try:
-                return t_value[0][0]
-            except Exception as e:
-                logging.error("Couldn't find the value for the key '%s' in the dictionary. %s" % (t_key, str(e)))
-                terminal.tprint("Couldn't find the value for the key '%s' in the dictionary. %s" % (t_key, str(e)), 'fail')
-                sentry.captureException()
-                return "Unknown (%s)" % t_key
+        try:
+            query = """
+                SELECT t_value from dictionary_items where t_key = '%s'
+            """ % t_key
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                t_value = cursor.fetchall()
+            return t_value[0][0]
+        except Exception as e:
+            logging.error("Couldn't find the value for the key '%s' in the dictionary. %s" % (t_key, str(e)))
+            terminal.tprint("Couldn't find the value for the key '%s' in the dictionary. %s" % (t_key, str(e)), 'fail')
+            sentry.captureException()
+            return "Unknown (%s)" % t_key
 
     def refresh_forms(self, process_structure=False, auto_create_form_group=False):
         """
