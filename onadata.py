@@ -83,3 +83,64 @@ class Onadata():
             terminal.tprint(str(e), 'fail')
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
+
+    def upload_itemsets_csv(self, file_name):
+        # for all projects which are downloadable, upload the new itemsets.csv
+        # print('uploading an itemsets csv')
+        try:
+            url = "%s%s" % (self.server, self.api_all_forms)
+            all_forms = self.process_curl_request(url)
+            # terminal.tprint(json.dumps(all_forms), 'fail')
+            if all_forms is None:
+                raise Exception(("Error while executing the API request %s" % url))
+
+            for form in all_forms:
+                if not form['downloadable']: continue
+
+
+                # testing purposes
+                # if not (form['id_string'] == 'testing_v0_1' or form['id_string'] == 'chickens_v9_7'): continue
+
+                # we are updating this form
+                # we might need to delete the existing metadata
+                # print("\n\nupdating %s itemsets.csv" % form['id_string'])
+                # continue
+
+                # check if we have metadata
+                meta_url = '%s%s?xform=%s' % (self.server, self.metadata_uri, form['formid'])
+                meta_r = requests.get(meta_url, headers=self.headers)
+                # print("Fetching meta response code %s" % meta_r.status_code)
+                if meta_r.status_code != 200:
+                    terminal.tprint("Response %d: %s" % (meta_r.status_code, meta_r.text), 'fail')
+                    raise Exception(meta_r.text)
+
+                for form_meta in meta_r.json():
+                    if form_meta['data_value'] == 'itemsets.csv':
+                        # we need to delete this media
+                        # print("We found an old media, '%s', deleting it..." % form_meta['data_value'])
+                        delete_url = '%s%s/%s' % (self.server, self.metadata_uri, form_meta['id'])
+                        # to delete a metadata, I need super privileges, something I can't figure out for now
+                        # so lets use the master token
+                        master_headers = {'Authorization': "Token %s" % settings.ONADATA_MASTER}
+                        del_r = requests.delete(delete_url, headers=master_headers)
+
+                        if del_r.status_code != 204:
+                            # something went wrong
+                            raise Exception(del_r.text)
+                
+                # print("Deleting response code %s" % del_r.status_code)
+
+                url = '%s%s' % (self.server, self.metadata_uri)
+                itemsets = {'data_file': open(file_name, 'rt')}
+                payload = {'data_type': 'media', 'data_value': 'itemsets.csv', 'xform': form['formid']}
+
+                r = requests.post(url, files=itemsets, data=payload, headers=self.headers)
+                # print("Media update response code %s " % r.status_code)
+                
+                if r.status_code != 201:
+                    # terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                    raise Exception(r.text)
+        except ConnectionError as e:
+            raise Exception("%s\n%s" % ("We can't establish a connection to the onadata server", str(e)))
+        except Exception as e:
+            raise Exception(e)
