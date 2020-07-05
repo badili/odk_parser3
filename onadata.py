@@ -24,6 +24,7 @@ class Onadata():
         self.form_data = 'api/v1/data/'
         self.form_stats = 'api/v1/stats/submissions/'
         self.form_rep = 'api/v1/forms/'
+        self.orgs = 'api/v1/orgs'
         self.media = 'api/v1/media'
         self.metadata_uri = 'api/v1/metadata'
 
@@ -65,6 +66,25 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
 
+    def register_organization(self, org_details):
+        """
+        Register a new project
+        """
+        print('Registering a new organization')
+        # requires admin privileges
+        try:
+            url = '%s%s' % (self.server, 'api/v1/projects')
+            r = requests.post(url, project_details, headers=self.headers)
+            if r.status_code == 201:
+                return r.json()
+            else:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while registering a new profile')
+
     def create_project(self, project_details):
         """
         Register a new project
@@ -79,8 +99,7 @@ class Onadata():
                 terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
                 raise Exception(r.text)
         except Exception as e:
-            print((traceback.format_exc()))
-            terminal.tprint(str(e), 'fail')
+            if settings.DEBUG: print((traceback.format_exc()))
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
 
@@ -144,3 +163,4 @@ class Onadata():
             raise Exception("%s\n%s" % ("We can't establish a connection to the onadata server", str(e)))
         except Exception as e:
             raise Exception(e)
+
