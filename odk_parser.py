@@ -176,7 +176,7 @@ class OdkParser():
         to_return.append({'title': 'Select One', 'id': '-1'})
 
         try:
-            url = "%s%s" % (self.ona_url, self.api_all_forms)
+            url = "%s/%s" % (self.ona_url, self.api_all_forms)
             all_forms = self.process_curl_request(url)
             # terminal.tprint(json.dumps(all_forms), 'fail')
             if all_forms is None:
@@ -184,6 +184,7 @@ class OdkParser():
                 return
         except ConnectionError as e:
             terminal.tprint("We don't have a connection to the ONA server, revert to the saved forms..", 'debug')
+            sentry.captureMessage("I cannot connect to the ONA server. I will revert to the saved forms", level='warning', extra={'messasge': str(e)})
             saved_forms = ODKForm.objects.all()
             for form in saved_forms:
                 to_return.append({'title': form.form_name, 'id': form.form_id, 'full_id': form.full_form_id})
@@ -286,9 +287,9 @@ class OdkParser():
                 terminal.tprint("\tWe have some new submissions, so fetch them from the server and save them offline", 'info')
                 # fetch the submissions and filter by submission time
                 if settings.IS_DRY_RUN:
-                    url = "%s%s%d.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
+                    url = "%s/%s%d.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
                 else:
-                    url = "%s%s%d.json?sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
+                    url = "%s/%s%d.json?sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
 
                 # url = "%s%s%d.json?fields=[\"_uuid\", \"_id\"]" % (self.ona_url, self.form_data, form_id)
                 submission_uuids = self.process_curl_request(url)
@@ -309,7 +310,7 @@ class OdkParser():
                     cur_submission = RawSubmissions.objects.filter(form_id=odk_form.id, uuid=uuid['_uuid'])
                     if cur_submission.count() == 0:
                         # the current submission is not saved in the database, so fetch and save it...
-                        url = "%s%s%d/%s" % (self.ona_url, self.form_data, form_id, uuid['_id'])
+                        url = "%s/%s%d/%s" % (self.ona_url, self.form_data, form_id, uuid['_id'])
                         submission = self.process_curl_request(url)
                         # terminal.tprint(json.dumps(submission), 'warn')
 
@@ -350,7 +351,7 @@ class OdkParser():
     def online_submissions_count(self, form_id):
         # given a form id, process the number of submitted instances
         # terminal.tprint("\tComputing the number of submissions of the form with id '%s'" % form_id, 'info')
-        url = "%s%s%d?%s" % (self.ona_url, self.form_stats, form_id, "group=&name=time")
+        url = "%s/%s%d?%s" % (self.ona_url, self.form_stats, form_id, "group=&name=time")
         try:
             stats = self.process_curl_request(url)
         except ConnectionError:
@@ -449,7 +450,7 @@ class OdkParser():
         Get the structure of the current form
         """
         try:
-            url = "%s%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
+            url = "%s/%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
             terminal.tprint("Fetching the form structure for form with id = %d" % form_id, 'header')
             form_structure = self.process_curl_request(url)
 
@@ -578,8 +579,8 @@ class OdkParser():
         dict_item = DictionaryItems.objects.filter(form_group=self.cur_form_group, parent_node=parent_node, t_key=node['name'])
 
         if dict_item.count() == 0:
-            terminal.tprint('\tSaving the node (%s)' % node_type, 'warn')
-            terminal.tprint('\t\t%s' % json.dumps(node), 'okblue')
+            # terminal.tprint('\tSaving the node (%s)' % node_type, 'warn')
+            # terminal.tprint('\t\t%s' % json.dumps(node), 'okblue')
             node_label = node['label'] if 'label' in node else node['name']
             (node_label, locale) = self.process_node_label(node)
             try:
@@ -1357,11 +1358,11 @@ class OdkParser():
         """
         headers = {'Authorization': "Token %s" % self.ona_api_token}
         # terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
-        # terminal.tprint("\tProcessing API request %s" % url, 'okblue')
+        terminal.tprint("\tProcessing API request %s" % url, 'okblue')
         try:
             r = requests.get(url, headers=headers)
         except ConnectionError as e:
-            raise ConnectionError('There was an error while connecting to the ONA server')
+            raise ConnectionError('There was an error while connecting to the ONA server. %s' % str(e))
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.info(str(e))
