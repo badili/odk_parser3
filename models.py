@@ -158,6 +158,11 @@ class ODKForm(BaseTable):
     processed_structure = JSONField(null=True)
     auto_update = models.BooleanField(default=False)
     is_source_deleted = models.BooleanField(default=False)
+    no_submissions = models.SmallIntegerField(default=0)
+    is_active = models.BooleanField(default=0)
+    datetime_published = models.DateTimeField(default=None)
+    latest_upload = models.DateTimeField(default=None)
+
 
     class Meta:
         db_table = 'odkform'

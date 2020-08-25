@@ -20,6 +20,7 @@ from django.conf import settings
 from django.forms.models import model_to_dict
 from django.db import connection, transaction, IntegrityError
 from django.core.paginator import Paginator
+from django.core.exceptions import FieldDoesNotExist
 from requests.exceptions import ConnectionError
 from django.http import HttpRequest
 
@@ -212,15 +213,32 @@ class OdkParser():
                 else:
                     form_group = None
 
-                cur_form = ODKForm(
-                    form_id=form['formid'],
-                    form_group=form_group,
-                    form_name=form['title'],
-                    full_form_id=form['id_string'],
-                    auto_update=False,
-                    is_source_deleted=False
-                )
-                cur_form.publish()
+                try:
+                    cur_form = ODKForm(
+                        form_id=form['formid'],
+                        form_group=form_group,
+                        form_name=form['title'],
+                        full_form_id=form['id_string'],
+                        auto_update=False,
+                        is_source_deleted=False,
+                        no_submissions=form['num_of_submissions'],
+                        is_active=form['downloadable'],
+                        datetime_published=form['date_created'],
+                        latest_upload=form['last_updated_at']
+                    )
+                    cur_form.publish()
+                except FieldDoesNotExist:
+                    cur_form = ODKForm(
+                        form_id=form['formid'],
+                        form_group=form_group,
+                        form_name=form['title'],
+                        full_form_id=form['id_string'],
+                        auto_update=False,
+                        is_source_deleted=False
+                    )
+                    cur_form.publish()
+                except:
+                    raise
 
                 if process_structure:
                     # we to process and save the form structure
