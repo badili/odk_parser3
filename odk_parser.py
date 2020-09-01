@@ -593,6 +593,10 @@ class OdkParser():
         return (m.group(1).lower(), grp_name) if m is not None and len(m.groups()) == 1 else (None, None)
 
     def add_dictionary_items(self, node, node_type, parent_node=None):
+        # some forms have the audit tags.. so skip adding these
+        if node_type == 'audit':
+            return
+
         # check if this key already exists
         dict_item = DictionaryItems.objects.filter(form_group=self.cur_form_group, parent_node=parent_node, t_key=node['name'])
 
