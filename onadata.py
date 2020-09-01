@@ -27,6 +27,7 @@ class Onadata():
         self.orgs = 'api/v1/orgs'
         self.media = 'api/v1/media'
         self.metadata_uri = 'api/v1/metadata'
+        self.reset_passwd_url = 'api/v1/user/reset'
 
     def process_curl_request(self, url):
         """
