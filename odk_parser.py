@@ -104,6 +104,11 @@ class OdkParser():
         for setting in ona_settings:
             setattr(self, setting.setting_key, setting.setting_value)
 
+        try:
+            print(self.ona_url)
+        except:
+            self.ona_url = settings.ONADATA_URL
+
     def load_defined_settings(self):
         """
         Load the defined settings in the database to be system variables
