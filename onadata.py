@@ -1,5 +1,6 @@
 import requests
 import traceback
+import re
 
 from cryptography.fernet import Fernet
 from django.conf import settings
@@ -104,7 +105,7 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
 
-    def upload_itemsets_csv(self, file_name):
+    def upload_itemsets_csv(self, file_name, resource_name, prefix):
         # for all projects which are downloadable, upload the new itemsets.csv
         # print('uploading an itemsets csv')
         try:
@@ -117,14 +118,15 @@ class Onadata():
             for form in all_forms:
                 if not form['downloadable']: continue
 
-
                 # testing purposes
                 # if not (form['id_string'] == 'testing_v0_1' or form['id_string'] == 'chickens_v9_7'): continue
+                if re.match(prefix, form['id_string']) is None:
+                    # skip things we are not interested in
+                    continue
 
                 # we are updating this form
                 # we might need to delete the existing metadata
-                # print("\n\nupdating %s itemsets.csv" % form['id_string'])
-                # continue
+                # print("\n\nupdating %s %s" % (form['id_string'], resource_name))
 
                 # check if we have metadata
                 meta_url = '%s%s?xform=%s' % (self.server, self.metadata_uri, form['formid'])
@@ -135,7 +137,7 @@ class Onadata():
                     raise Exception(meta_r.text)
 
                 for form_meta in meta_r.json():
-                    if form_meta['data_value'] == 'itemsets.csv':
+                    if form_meta['data_value'] == resource_name:
                         # we need to delete this media
                         # print("We found an old media, '%s', deleting it..." % form_meta['data_value'])
                         delete_url = '%s%s/%s' % (self.server, self.metadata_uri, form_meta['id'])
@@ -152,7 +154,7 @@ class Onadata():
 
                 url = '%s%s' % (self.server, self.metadata_uri)
                 itemsets = {'data_file': open(file_name, 'rt')}
-                payload = {'data_type': 'media', 'data_value': 'itemsets.csv', 'xform': form['formid']}
+                payload = {'data_type': 'media', 'data_value': resource_name, 'xform': form['formid']}
 
                 r = requests.post(url, files=itemsets, data=payload, headers=self.headers)
                 # print("Media update response code %s " % r.status_code)
@@ -160,8 +162,12 @@ class Onadata():
                 if r.status_code != 201:
                     # terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
                     raise Exception(r.text)
+        
         except ConnectionError as e:
+            sentry.captureException()
             raise Exception("%s\n%s" % ("We can't establish a connection to the onadata server", str(e)))
+        
         except Exception as e:
+            sentry.captureException()
             raise Exception(e)
 
