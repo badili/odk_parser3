@@ -37,7 +37,7 @@ try:
         from .common_tasks import Emails
     elif settings.SITE_NAME == 'BoxGirls M&E System':
         from vendor.terminal_output import Terminal
-        from .common_tasks import Emails
+        from me_app.common_tasks import Emails
     elif settings.SITE_NAME == 'Church Register':
         from .terminal_output import Terminal
         from .common_tasks import Emails
