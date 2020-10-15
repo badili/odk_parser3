@@ -1,5 +1,4 @@
 
-
 import requests
 import re
 import os
@@ -13,6 +12,7 @@ import hashlib
 
 from datetime import datetime
 from collections import defaultdict, OrderedDict
+from contextlib import suppress
 from django.db import connections
 
 from raven import Client
@@ -137,6 +137,10 @@ class OdkParser():
         Returns:
             TYPE: Description
         """
+        
+        with suppress(AttributeError):
+            if settings.IGNORE_ONA_DB_SETTINGS: return True
+            
         ona_settings = SystemSettings.objects.filter(setting_key__contains='ona_')
         return False if len(ona_settings) == 0 else True
 
@@ -1095,8 +1099,12 @@ class OdkParser():
             # get the fields to include as part of the form metadata
             # todo: Add option of specifying metadata
             form_meta = ['_uuid', 's1p1q3_country', 's1p1q3_sel_country']
-            self.pk_name = 'hh_'
-            self.sk_format = 'id_'
+            try:
+                self.pk_name = settings.PRIMARY_KEY_PREFIX
+                self.sk_format = settings.SECONDARY_KEY_PREFIX
+            except:
+                self.pk_name = 'hh_'
+                self.sk_format = 'id_'
         except Exception as e:
             terminal.tprint("Form settings for form id (%d) haven't been defined" % form_id, 'fail')
             logger.info("The settings for the form id (%s) haven't been defined" % str(form_id))
@@ -2865,6 +2873,10 @@ class OdkParser():
         Returns:
             boolean: Returns True if it is the first time the user is logging in the system else returns false
         """
+        
+        with suppress(AttributeError):
+            if settings.IGNORE_ONA_DB_SETTINGS: return False
+
         system_name = SystemSettings.objects.filter(setting_key='system_name')
 
         return True if len(system_name) == 0 else False
