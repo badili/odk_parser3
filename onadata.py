@@ -28,7 +28,11 @@ class Onadata():
         self.orgs = 'api/v1/orgs'
         self.media = 'api/v1/media'
         self.metadata_uri = 'api/v1/metadata'
-        self.reset_passwd_url = 'api/v1/user/reset'
+        self.initiate_paswd_reset = 'api/v1/user/reset_url'
+        self.finalize_paswd_reset = 'api/v1/user/reset'
+        # self.reset_url = '%s/%s' % (self.server, 'reset_form')
+        # this is hardccoded by ona
+        self.reset_url = 'http://testdomain.com/reset_form'
 
     def process_curl_request(self, url):
         """
@@ -55,7 +59,7 @@ class Onadata():
         """
         print('Registering a new user')
         try:
-            url = '%s%s' % (self.server, 'api/v1/profiles')
+            url = '%s/%s' % (self.server, 'api/v1/profiles')
             r = requests.post(url, user_details, headers=self.headers)
             if r.status_code == 201:
                 return r.json()
@@ -170,4 +174,32 @@ class Onadata():
         except Exception as e:
             sentry.captureException()
             raise Exception(e)
+
+    def reset_ona_password(self, email, new_password):
+        try:
+            # 1. Get the user id and the reset token
+            # 2. Reset the password
+            url = '%s/%s' % (self.server, self.initiate_paswd_reset)
+            user_details = {'email': email, 'reset_url': self.reset_url}
+            r = requests.post(url, user_details, headers=self.headers)
+            if r.status_code != 200:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+
+            # we should have our uid and token
+            resp = r.json()
+            url = '%s/%s' % (self.server, self.finalize_paswd_reset)
+            user_details = {'new_password': new_password, 'uid': resp['uid'], 'token': resp['token']}
+            r = requests.post(url, user_details, headers=self.headers)
+            if r.status_code != 200:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+
+            # we are good, password reset successfully
+
+        except Exception as e:
+            if settings.DEBUG: terminal.tprint(str(e), 'fail')
+            sentry.captureException()
+            raise Exception('There was an error while processing an Onadata request')
+
 
