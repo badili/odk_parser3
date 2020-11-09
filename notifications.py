@@ -44,6 +44,9 @@ try:
     elif settings.SITE_NAME == 'Co-Infection Data Hub':
         from coinfection.terminal_output import Terminal
         from coinfection.common_tasks import Emails
+    elif settings.SITE_NAME == 'AAGRIS':
+        from aagris.terminal_output import Terminal
+        from aagris.common_tasks import Emails
         
     else:
         from vendor.terminal_output import Terminal
@@ -811,8 +814,10 @@ class Notification():
             # print(email_settings)
             template = self.env.get_template(email_settings['template'])
             email_html = template.render(email_settings)
+            cc = email_settings['cc'] if 'cc' in email_settings else None
+            use_queue = email_settings['use_queue'] if 'use_queue' in email_settings else False
 
-            Emails.send_email(email_settings['recipient_email'], email_settings['sender_email'], None, email_settings['subject'], email_html)
+            Emails.send_email(email_settings['recipient_email'], email_settings['sender_email'], cc, email_settings['subject'], email_html, use_queue)
         except Exception as e:
             if settings.DEBUG: terminal.tprint(str(e), 'fail')
             sentry.captureException()
