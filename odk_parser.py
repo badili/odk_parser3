@@ -430,13 +430,13 @@ class OdkParser():
                 struct_type = self.determine_type(cur_form.processed_structure)
 
                 terminal.tprint('The processed structure type is -- %s' % struct_type, 'fail')
-                if(struct_type is 'is_string'):
+                if(struct_type == 'is_string'):
                     processed_nodes = cur_form.processed_structure
 
                     # I am gambling that the following are only needed when a string is fetched from the database
                     m = re.findall(r"^'(.+)'$", processed_nodes)
                     processed_nodes = json.loads(m[0])
-                elif(struct_type is 'is_list'):
+                elif(struct_type == 'is_list'):
                     processed_nodes = cur_form.processed_structure
                 else:
                     processed_nodes = (cur_form.processed_structure)
@@ -1392,7 +1392,7 @@ class OdkParser():
         Create and execute a curl request
         """
         headers = {'Authorization': "Token %s" % self.ona_api_token}
-        # terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
+        terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
         terminal.tprint("\tProcessing API request %s" % url, 'okblue')
         try:
             r = requests.get(url, headers=headers)
@@ -2509,6 +2509,9 @@ class OdkParser():
         if re.search('alt', column):
             # we have altitude 
             return geo[2]
+        if re.search('accuracy', column):
+            # we have altitude 
+            return geo[3]
 
         raise Exception('Unknown Destination Column: Encountered a GPS data field (%s), but I cant seem to deduce which type(latitude, longitude, altitude) the current column (%s) is.' % (q_data[sources[0]], column))
 

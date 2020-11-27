@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from easy_thumbnails.fields import ThumbnailerImageField
 from django.conf import settings
 
-if settings.DATABASES['default']['ENGINE'] == 'django.db.backends.mysql':
+if settings.DATABASES['default']['ENGINE'] == 'django.db.backends.mysql' or settings.DATABASES['default']['ENGINE'] == 'django.contrib.gis.db.backends.mysql':
     # from django_mysql.models import JSONField
     from jsonfield import JSONField
 elif settings.DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql_psycopg2':
