@@ -210,8 +210,9 @@ class Onadata():
 
         try:
             url = "%s/%s" % (self.server, self.api_all_forms)
-            print(url)
+            if settings.DEBUG: print(url)
             all_forms = self.process_curl_request(url)
+            share_errors = []
 
             if all_forms is None:
                 raise Exception(("Error while executing the API request %s" % url))
@@ -229,13 +230,18 @@ class Onadata():
                 # share_url = '%s%s' % (self.server, self.metadata_uri)
 
                 share_url = '%s/%s' % (self.server, self.share_url % form['formid'])
-                for type_, det in share_details.items():
-                    det['usernames'] = ','.join(det['usernames'])
+                for det in share_details:
                     req = requests.post(share_url, data=det, headers=self.headers)
 
                     if req.status_code != 204:
                         # something went wrong
-                        raise Exception(req.text)
+                        share_errors.append(req.text)
+
+            if len(share_errors) != 0:
+                sentry.captureMessage("There was an error while sharing some forms. %s" % '; '.join(share_errors), level='debug', extra={'forms': form_prefix_regex, 'share_details': share_details})
+                return 'There was some errors while sharing some forms with some users. If some users cannot see some forms, please contact the system admin.'
+            else:
+                return None
 
         
         except ConnectionError as e:
