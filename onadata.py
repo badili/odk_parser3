@@ -30,6 +30,7 @@ class Onadata():
         self.metadata_uri = 'api/v1/metadata'
         self.initiate_paswd_reset = 'api/v1/user/reset_url'
         self.finalize_paswd_reset = 'api/v1/user/reset'
+        self.share_url = 'api/v1/forms/%d/share'
         # self.reset_url = '%s/%s' % (self.server, 'reset_form')
         # this is hardccoded by ona
         self.reset_url = 'http://testdomain.com/reset_form'
@@ -202,4 +203,47 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while processing an Onadata request')
 
+    def share_project_forms(self, form_prefix_regex, share_details):
+        # form_prefixes is a list of prefix to use
+        # users is a list of usernames to share the form with
+        # role is the role to use: It can be readonly, dataentry, editor, manager
 
+        try:
+            url = "%s/%s" % (self.server, self.api_all_forms)
+            print(url)
+            all_forms = self.process_curl_request(url)
+
+            if all_forms is None:
+                raise Exception(("Error while executing the API request %s" % url))
+
+            for form in all_forms:
+                if not form['downloadable']: continue
+
+                # testing purposes
+                # if not (form['id_string'] == 'testing_v0_1' or form['id_string'] == 'chickens_v9_7'): continue
+                if re.match(form_prefix_regex, form['id_string']) is None:
+                    # skip things we are not interested in
+                    continue
+
+                # we are sharing this form with the users
+                # share_url = '%s%s' % (self.server, self.metadata_uri)
+
+                share_url = '%s/%s' % (self.server, self.share_url % form['formid'])
+                for type_, det in share_details.items():
+                    det['usernames'] = ','.join(det['usernames'])
+                    req = requests.post(share_url, data=det, headers=self.headers)
+
+                    if req.status_code != 204:
+                        # something went wrong
+                        raise Exception(req.text)
+
+        
+        except ConnectionError as e:
+            sentry.captureException()
+            raise Exception("%s\n%s" % ("We can't establish a connection to the onadata server", str(e)))
+        
+
+        except Exception as e:
+            if settings.DEBUG: terminal.tprint(str(e), 'fail')
+            sentry.captureException()
+            raise Exception('There was an error while sharing a form with users')
