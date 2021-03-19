@@ -110,7 +110,7 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
 
-    def upload_itemsets_csv(self, file_name, resource_name, prefix):
+    def upload_itemsets_csv(self, file_name, resource_name, form_prefixes):
         # for all projects which are downloadable, upload the new itemsets.csv
         # print('uploading an itemsets csv')
         try:
@@ -123,12 +123,13 @@ class Onadata():
             for form in all_forms:
                 if not form['downloadable']: continue
 
-                # testing purposes
-                # if not (form['id_string'] == 'testing_v0_1' or form['id_string'] == 'chickens_v9_7'): continue
-                if re.match(prefix, form['id_string']) is None:
-                    # skip things we are not interested in
-                    continue
+                # check if the form id matches one of our form prefixes
+                z = lambda x: re.match(x, form['id_string'])
+                # if settings.DEBUG: print("\nEvaluating %s" % form['id_string'])
+                # if settings.DEBUG: print(list(map(z, form_prefixes)))
+                if len(list(filter(None, map(z, form_prefixes)))) == 0: continue            # the form is not in our list
 
+                # if settings.DEBUG: print("Updating %s" % form['id_string'])
                 # we are updating this form
                 # we might need to delete the existing metadata
                 # print("\n\nupdating %s %s" % (form['id_string'], resource_name))
