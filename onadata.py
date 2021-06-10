@@ -58,7 +58,7 @@ class Onadata():
         """
         Register a new profile
         """
-        print('Registering a new user')
+        if settings.DEBUG: print('Registering a new user')
         try:
             url = '%s/%s' % (self.server, 'api/v1/profiles')
             r = requests.post(url, user_details, headers=self.headers)
@@ -68,7 +68,7 @@ class Onadata():
                 terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
                 raise Exception(r.text)
         except Exception as e:
-            print((traceback.format_exc()))
+            if settings.DEBUG: print((traceback.format_exc()))
             terminal.tprint(str(e), 'fail')
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')

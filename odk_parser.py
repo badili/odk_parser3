@@ -108,6 +108,7 @@ class OdkParser():
             print(self.ona_url)
         except:
             self.ona_url = settings.ONADATA_URL
+            self.ona_api_token = settings.ONADATA_TOKEN
 
     def load_defined_settings(self):
         """
@@ -1390,29 +1391,30 @@ class OdkParser():
     def process_curl_request(self, url):
         """
         Create and execute a curl request
-        """
-        headers = {'Authorization': "Token %s" % self.ona_api_token}
+        """        
         terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
         terminal.tprint("\tProcessing API request %s" % url, 'okblue')
         try:
+            headers = {'Authorization': "Token %s" % self.ona_api_token}
             r = requests.get(url, headers=headers)
+
+            if r.status_code == 200:
+                # terminal.tprint("\tResponse %d" % r.status_code, 'ok')
+                # terminal.tprint(json.dumps(r.json()), 'warn')
+                return r.json()
+            else:
+                terminal.tprint("\tResponse %d" % r.status_code, 'fail')
+                terminal.tprint(r.text, 'fail')
+                terminal.tprint(url, 'warn')
+                return None
+
         except ConnectionError as e:
             raise ConnectionError('There was an error while connecting to the ONA server. %s' % str(e))
+
         except Exception as e:
             logger.error(traceback.format_exc())
             logger.info(str(e))
             sentry.captureException()
-            return None
-
-        if r.status_code == 200:
-            # terminal.tprint("\tResponse %d" % r.status_code, 'ok')
-            # terminal.tprint(json.dumps(r.json()), 'warn')
-            return r.json()
-        else:
-            terminal.tprint("\tResponse %d" % r.status_code, 'fail')
-            terminal.tprint(r.text, 'fail')
-            terminal.tprint(url, 'warn')
-
             return None
 
     def get_views_info(self):
