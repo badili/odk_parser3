@@ -994,6 +994,7 @@ class OdkParser():
                     associated_forms.append(t_form.form_id)
                 form_name = form_group.group_name
         except Exception as e:
+            print(str(e))
             print((traceback.format_exc()))
             # there is an error getting the associated forms, so get data from just one form
             terminal.tprint(str(e), 'fail')
@@ -1229,7 +1230,7 @@ class OdkParser():
             if clean_key in self.cleaners:
                 value = self.get_clean_data_value(self.cleaners[clean_key], value)
 
-            is_json = True
+            is_json = None
 
             if val_type == 'is_list':
                 # temporarily add the current clean_key to the nodes of interest, to see if there is hidden data in the current node
@@ -1302,7 +1303,7 @@ class OdkParser():
         """
         try:
             float(input) + 2
-        except Exception:
+        except Exception as e:
             if isinstance(input, list) is True:
                 return 'is_list'
             elif input is None:
@@ -1313,14 +1314,16 @@ class OdkParser():
                 return 'is_zero'
             else:
                 try:
-                    json.loads(input)
-                except ValueError:
+                    a = json.loads(input)
+                    if a == False or a == True:
+                        return 'is_string'              # We have false or true values which are strings
+                except ValueError as f:
                     if isinstance(input, six.string_types) is True:
                         return 'is_string'
 
                     terminal.tprint(str(input), 'fail')
                     return 'is_none'
-                except Exception:
+                except Exception as g:
                     # try encoding the input as string
                     try:
                         json.loads(str(input))
