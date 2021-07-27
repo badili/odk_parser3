@@ -211,6 +211,11 @@ class OdkParser():
             try:
                 saved_form = ODKForm.objects.get(full_form_id=form['id_string'])
                 terminal.tprint("The form '%s' is already saved in the database" % saved_form.form_name, 'ok')
+                if saved_form.no_submissions != form['num_of_submissions']:
+                    saved_form.no_submissions = form['num_of_submissions']
+                    saved_form.latest_upload = form['last_updated_at']
+                    saved_form.save()
+                
                 to_return.append({'title': saved_form.form_name, 'id': saved_form.form_id, 'full_id': saved_form.full_form_id})
             except ODKForm.DoesNotExist as e:
                 # this form is not saved in the database, so save it
