@@ -813,6 +813,7 @@ class Notification():
         try:
             # print(email_settings)
             template = self.env.get_template(email_settings['template'])
+            email_settings['site_name'] = settings.SITE_NAME
             email_html = template.render(email_settings)
             cc = email_settings['cc'] if 'cc' in email_settings else None
             use_queue = email_settings['use_queue'] if 'use_queue' in email_settings else False
