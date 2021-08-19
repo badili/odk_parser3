@@ -191,7 +191,7 @@ class OdkParser():
             all_forms = self.process_curl_request(url)
             # terminal.tprint(json.dumps(all_forms), 'fail')
             if all_forms is None:
-                print(("Error while executing the API request %s" % url))
+                if settings.DEBUG: print(("Error while executing the API request %s" % url))
                 return
         except ConnectionError as e:
             terminal.tprint("We don't have a connection to the ONA server, revert to the saved forms..", 'debug')
@@ -201,7 +201,7 @@ class OdkParser():
                 to_return.append({'title': form.form_name, 'id': form.form_id, 'full_id': form.full_form_id})
             return to_return
         except Exception as e:
-            print(e)
+            if settings.DEBUG: print(e)
             # sentry.captureException()
             terminal.tprint(str(e), 'fail')
             raise Exception('There was an error while fetching new forms from the database...')
@@ -464,12 +464,12 @@ class OdkParser():
             terminal.tprint(str(e), 'fail')
         except TypeError as e:
             # Can we live with this???
-            print((traceback.format_exc()))
+            if settings.DEBUG: print((traceback.format_exc()))
             terminal.tprint(str(e), 'fail')
             # terminal.tprint(json.dumps(processed_nodes), 'fail')
             terminal.tprint('Can we live with this (%s) error???' % str(e), 'ok')
         except Exception as e:
-            print((traceback.format_exc()))
+            if settings.DEBUG: print((traceback.format_exc()))
             logger.debug(str(e))
             terminal.tprint(str(e), 'fail')
             sentry.captureException()
@@ -877,7 +877,7 @@ class OdkParser():
             base_name, file_extension = os.path.splitext(filename)
 
             terminal.tprint("\tProcessing the file '%s' for saving to the database" % filename, 'warn')
-            print (file_extension)
+            if settings.DEBUG: print (file_extension)
             if file_extension.decode('ascii') == '.csv':
                 cmd = import_command % (
                     settings.DATABASES['default']['DRIVER'],
@@ -897,7 +897,7 @@ class OdkParser():
                             cursor.execute(dquery)
                     terminal.tprint("\tRunning the command '%s'" % cmd, 'ok')
                     # run commands to create primary key
-                    print((subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE).stdout.read()))
+                    if settings.DEBUG: print((subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE).stdout.read()))
                 except Exception as e:
                     terminal.tprint("\tError while converting the csv file '%s' to a table '%s'.\n\t%s" % (filename, table_name, str(e)), 'fail')
                     sentry.captureException()
@@ -999,8 +999,8 @@ class OdkParser():
                     associated_forms.append(t_form.form_id)
                 form_name = form_group.group_name
         except Exception as e:
-            print(str(e))
-            print((traceback.format_exc()))
+            if settings.DEBUG: print(str(e))
+            if settings.DEBUG: print((traceback.format_exc()))
             # there is an error getting the associated forms, so get data from just one form
             terminal.tprint(str(e), 'fail')
             associated_forms.append(form_id)
@@ -1027,7 +1027,7 @@ class OdkParser():
             except Exception as e:
                 # logging.debug(traceback.format_exc())
                 # logging.error(str(e))
-                print((traceback.format_exc()))
+                if settings.DEBUG: print((traceback.format_exc()))
                 terminal.tprint(str(e), 'fail')
                 sentry.captureException()
                 # raise Exception(str(e))
@@ -1158,7 +1158,6 @@ class OdkParser():
 
                         if self.determine_type(data) == 'is_string':
                             terminal.tprint("\tGiving up. I can't convert the string data to a json object.", 'fail')
-                            print(data)
                             raise ValueError("Giving up. I can't convert the string data to a json object.")
 
                         # terminal.tprint("\tAfter conversion: %s" % self.determine_type(data), 'okblue')
@@ -2692,8 +2691,6 @@ class OdkParser():
         all_errors = ProcessingErrors.objects.all().order_by('-id')
         p = Paginator(all_errors, per_page)
         p_errors = p.page(cur_page)
-        if sorts is not None:
-            print(sorts)
 
         to_return = []
         for error in p_errors:
@@ -2813,8 +2810,6 @@ class OdkParser():
         # print (ODKForm.objects.select_related('form_group').values('id', 'form_group__order_index', 'form_group__group_name', 'form_id', 'form_name', 'full_form_id', 'auto_update', 'is_source_deleted').order_by('id').query)
         p = Paginator(all_forms, per_page)
         p_forms = p.page(cur_page)
-        if sorts is not None:
-            print(sorts)
 
         to_return = []
         for frm in p_forms:
@@ -2939,8 +2934,6 @@ class OdkParser():
         all_groups = ODKFormGroup.objects.all().values('id', 'order_index', 'group_name', 'comments').order_by('id')
         p = Paginator(all_groups, per_page)
         f_groups = p.page(cur_page)
-        if sorts is not None:
-            print(sorts)
 
         to_return = []
         for grp in f_groups:

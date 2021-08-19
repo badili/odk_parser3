@@ -186,6 +186,7 @@ class RawSubmissions(BaseTable):
     is_processed = models.SmallIntegerField(default=0)
     is_modified = models.BooleanField(default=0)
     raw_data = JSONField()
+    processing_comments = models.CharField(max_length=10000, null=True, blank=True)
 
     class Meta:
         db_table = 'raw_submissions'
