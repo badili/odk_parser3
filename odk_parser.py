@@ -1409,6 +1409,9 @@ class OdkParser():
                 # terminal.tprint("\tResponse %d" % r.status_code, 'ok')
                 # terminal.tprint(json.dumps(r.json()), 'warn')
                 return r.json()
+            elif r.status_code == 404:
+                terminal.tprint("\t%d: Form not found" % r.status_code, 'fail')
+                return None
             else:
                 terminal.tprint("\tResponse %d" % r.status_code, 'fail')
                 terminal.tprint(r.text, 'fail')
