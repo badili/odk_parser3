@@ -47,9 +47,13 @@ try:
     elif settings.SITE_NAME == 'AAGRIS':
         from aagris.terminal_output import Terminal
         from aagris.common_tasks import Emails
+    elif settings.SITE_NAME == 'FLAIR Project':
+        from toolkit.terminal_output import Terminal
+        from toolkit.common_tasks import Emails
         
     else:
-        from vendor.terminal_output import Terminal
+        from toolkit.terminal_output import Terminal
+        from toolkit.common_tasks import Emails
 except Exception as e:
     raise
 
