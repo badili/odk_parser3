@@ -254,3 +254,20 @@ class Onadata():
             if settings.DEBUG: terminal.tprint(str(e), 'fail')
             sentry.captureException()
             raise Exception('There was an error while sharing a form with users')
+
+
+    def get_audit_log_file(self):
+        # The user audit log file is located on the server media folder.
+        # There is a table logger_attachment in the database which contains a list of all audit logs and their associated instances
+        # onadata=# select * from logger_attachment order by id desc limit 5;
+        #   id  |                     media_file                      |          mimetype           | extension | instance_id |         date_created          |         date_modified         |          deleted_at           | file_size |   name    |  deleted_by_id
+        # ------+-----------------------------------------------------+-----------------------------+-----------+-------------+-------------------------------+-------------------------------+-------------------------------+-----------+-----------+---------------
+        #  1031 | kws/attachments/56_kws_immob_v1_0/audit_8FKg0eJ.csv | text/comma-separated-values | csv       |        1028 | 2021-10-31 13:59:06.095023+00 | 2021-10-31 13:59:06.095049+00 | 2021-10-31 13:59:06.096332+00 |      5504 | audit.csv |
+        #  1030 | kws/attachments/56_kws_immob_v1_0/audit_I04FqLP.csv | text/comma-separated-values | csv       |        1027 | 2021-10-31 13:57:45.163967+00 | 2021-10-31 13:57:45.163988+00 | 2021-10-31 13:57:45.165176+00 |      3765 | audit.csv |
+        #  1029 | kws/attachments/56_kws_immob_v1_0/audit_b2gM6TU.csv | text/comma-separated-values | csv       |        1026 | 2021-10-31 13:57:44.779162+00 | 2021-10-31 13:57:44.779189+00 | 2021-10-31 13:57:44.780628+00 |      2124 | audit.csv |
+        #  1028 | kws/attachments/56_kws_immob_v1_0/audit_gIzkoqE.csv | text/comma-separated-values | csv       |        1025 | 2021-10-31 13:57:44.401643+00 | 2021-10-31 13:57:44.401666+00 | 2021-10-31 13:57:44.402897+00 |      2558 | audit.csv |
+        #  1027 | kws/attachments/56_kws_immob_v1_0/audit_sF5YYKv.csv | text/comma-separated-values | csv       |        1024 | 2021-10-31 13:57:44.027123+00 | 2021-10-31 13:57:44.027142+00 | 2021-10-31 13:57:44.028227+00 |      1948 | audit.csv |
+        #  
+        #  The column instance_id corresponds to the _id field of the exported submission
+
+        return False

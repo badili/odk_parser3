@@ -187,6 +187,8 @@ class RawSubmissions(BaseTable):
     is_modified = models.BooleanField(default=0)
     raw_data = JSONField()
     processing_comments = models.CharField(max_length=10000, null=True, blank=True)
+    duration=models.PositiveIntegerField(default=0, null=True, blank=True)
+    instance_id=models.PositiveIntegerField(default=0, null=True, blank=True)
 
     class Meta:
         db_table = 'raw_submissions'

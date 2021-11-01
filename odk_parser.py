@@ -351,6 +351,8 @@ class OdkParser():
                             form_id=odk_form.id,
                             # it seems some submissions don't have a uuid returned with the submission. Use our previous uuid
                             uuid=uuid['_uuid'],
+                            duration=uuid['_duration'],
+                            instance_id=uuid['_id'],
                             submission_time=submission['_submission_time'],
                             raw_data=submission
                         )
