@@ -219,7 +219,7 @@ class OdkParser():
                 to_return.append({'title': saved_form.form_name, 'id': saved_form.form_id, 'full_id': saved_form.full_form_id})
             except ODKForm.DoesNotExist as e:
                 # this form is not saved in the database, so save it
-                terminal.tprint("The form '%s' is not in the database, saving it" % form['id_string'], 'warn')
+                terminal.tprint("The form '%s' is not in the database, saving it" % form['id_string'], 'debug')
                 if auto_create_form_group:
                     form_group = self.auto_create_form_group(form['id_string'])
                     if form_group is None:
@@ -238,8 +238,8 @@ class OdkParser():
                         is_source_deleted=False,
                         no_submissions=form['num_of_submissions'],
                         is_active=form['downloadable'],
-                        datetime_published=form['date_created'],
-                        latest_upload=form['last_updated_at']
+                        datetime_published=datetime.strptime(form['date_created'], '%Y-%m-%dT%H:%M:%S.%f%z'),
+                        latest_upload=datetime.strptime(form['last_updated_at'], '%Y-%m-%dT%H:%M:%S.%f%z')
                     )
                     cur_form.publish()
                 except FieldDoesNotExist:
