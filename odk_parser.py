@@ -108,7 +108,7 @@ class OdkParser():
             print(self.ona_url)
         except:
             self.ona_url = settings.ONADATA_URL
-            self.ona_api_token = settings.ONADATA_TOKEN
+            self.ona_api_token = settings.ONADATA_MASTER
 
     def load_defined_settings(self):
         """
