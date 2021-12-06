@@ -264,7 +264,7 @@ class OdkParser():
                     self.cur_form_group = form_group.id
                     self.get_form_structure_from_server(form['formid'])
 
-                to_return.append({'title': form['title'], 'id': form['formid']})
+                to_return.append({'title': form['title'], 'id': form['formid'], 'full_id': form['id_string']})
             except Exception as e:
                 sentry.captureException()
                 terminal.tprint(str(e), 'fail')
