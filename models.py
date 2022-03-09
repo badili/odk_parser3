@@ -328,8 +328,8 @@ class FormMappings(BaseTable):
     validation_regex = models.CharField(max_length=100, null=True)
     is_record_identifier = models.BooleanField(default=False)
     is_null = models.SmallIntegerField(null=True)
-    is_lookup_field = models.NullBooleanField(default=False, null=True)
-    use_current_time = models.NullBooleanField(default=False, null=True)
+    is_lookup_field = models.BooleanField(default=False, null=True)
+    use_current_time = models.BooleanField(default=False, null=True)
 
     class Meta:
         unique_together = ('form_group', 'form_question', 'dest_table_name', 'dest_column_name')
