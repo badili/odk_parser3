@@ -1149,7 +1149,7 @@ class OdkParser():
             if self.determine_type(data) == 'is_json' and 'raw_data' in data:
                 # terminal.tprint('Is postgres db', 'okblue')
                 # terminal.tprint(json.dumps(data), 'okblue')
-                data = json.loads(data['raw_data'])
+                data = data['raw_data'] if self.determine_type(data['raw_data']) == 'is_json' else json.loads(data['raw_data'])
                 # terminal.tprint("\t%s" % data, 'ok')
                 # terminal.tprint("\tType before conversion: %s" % self.determine_type(data), 'warn')
                 if (self.determine_type(data) == 'is_string'):
