@@ -345,6 +345,7 @@ class OdkParser():
                         # the current submission is not saved in the database, so fetch and save it...
                         url = "%s/%s%d/%s" % (self.ona_url, self.form_data, form_id, uuid['_id'])
                         submission = self.process_curl_request(url)
+                        if not submission: continue     # we have an issue in fetching the data from the database
                         # terminal.tprint(json.dumps(submission), 'warn')
 
                         t_submission = RawSubmissions(
