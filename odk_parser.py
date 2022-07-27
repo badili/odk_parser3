@@ -161,7 +161,7 @@ class OdkParser():
             sentry.captureException()
             terminal.tprint(str(e), 'fail')
 
-        terminal.tprint(json.dumps(to_return), 'warn')
+        # terminal.tprint(json.dumps(to_return), 'warn')
         return to_return
 
     def get_value_from_dictionary(self, t_key):
@@ -352,7 +352,7 @@ class OdkParser():
                             form_id=odk_form.id,
                             # it seems some submissions don't have a uuid returned with the submission. Use our previous uuid
                             uuid=uuid['_uuid'],
-                            duration=uuid['_duration'],
+                            duration=0 if uuid['_duration'] == '' else uuid['_duration'],
                             instance_id=uuid['_id'],
                             submission_time=submission['_submission_time'],
                             raw_data=submission
@@ -977,14 +977,14 @@ class OdkParser():
             download_type (TYPE): Description
             view_name (TYPE): Description
             uuids (None, optional): A list of uuids to use to fetch the corresponding data instead of fetching all the submitted data
-            update_local_data (bool, optional): Whether or not to update the local dataset
+            update_local_data (bool, optional): Whether or not to download new submissions from the ODK server and update the local dataset
         Returns:
             TYPE: Description
         Raises:
             Exception: Description
         """
 
-        # print( "%s - %s - %s - %s - %s - %s" % (form_id, nodes, d_format, download_type, view_name, submission_filters))
+        print( "Form ID='%s'; Nodes='%s'; Format='%s'; Download Type='%s'; View Name='%s'; Submission Filters='%s'; UUIDS='%s'" % (form_id, nodes, d_format, download_type, view_name, submission_filters, uuids))
         view_name = None if view_name == '' else view_name
         associated_forms = []
         try:
@@ -1172,7 +1172,12 @@ class OdkParser():
                 # terminal.tprint('Is MySQL db', 'okblue')
                 data = json.loads(data)
 
-            data['unique_id'] = pk_key
+            try:
+                data['unique_id'] = pk_key
+            except Exception:
+                data = json.loads(data)
+                data['unique_id'] = pk_key
+
             if submission_filters is not None:
                 # try opportunistic checking if the filter keys are in the top level of the dictionary
                 if not self.determine_submission_filtering(data, submission_filters):
@@ -2976,7 +2981,7 @@ class OdkParser():
         # eg. my_awesome_name_v1, my_awesome_name_v14
         # we process this and extract the my_awesome_name as form name
         try:
-            if re.match('^(.+)(_v\d+)(_\d+)?$', full_form_id) is None:
+            if re.match('^(.+)(_v\d+)(_\d+)?$', full_form_id, flags=re.IGNORECASE) is None:
                 raise ValueError("The supplied form id '%s' doesn't conform to the expected pattern like 'my_awesome_name_v14' or 'my_awesome_name_v14_2'" % full_form_id)
 
             form_group_name = re.findall('^(.+)(_v\d+)(_\d+)?$', full_form_id)[0][0]
