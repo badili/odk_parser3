@@ -984,7 +984,7 @@ class OdkParser():
             Exception: Description
         """
 
-        print( "Form ID='%s'; Nodes='%s'; Format='%s'; Download Type='%s'; View Name='%s'; Submission Filters='%s'; UUIDS='%s'" % (form_id, nodes, d_format, download_type, view_name, submission_filters, uuids))
+        # print( "Form ID='%s'; Nodes='%s'; Format='%s'; Download Type='%s'; View Name='%s'; Submission Filters='%s'; UUIDS='%s'" % (form_id, nodes, d_format, download_type, view_name, submission_filters, uuids))
         view_name = None if view_name == '' else view_name
         associated_forms = []
         try:
@@ -3001,3 +3001,18 @@ class OdkParser():
             terminal.tprint(str(e), 'ok')
             sentry.captureException()
             return None
+
+    def updateRawSubmission(self, subm_id, new_json, reason, reprocess_data):
+        # the admins have made some changes to the raw data and are now saving the data
+        try:
+            subm = RawSubmissions.objects.get(id=subm_id)
+            subm.raw_data = json.loads(new_json)
+            subm.is_modified = 1
+            subm.processing_comments = '%s; %s' % (subm.processing_comments, reason)
+            if reprocess_data: subm.is_processed = 0
+            subm.save()
+
+        except Exception as e:
+            terminal.tprint(str(e), 'ok')
+            sentry.captureException()
+            raise
