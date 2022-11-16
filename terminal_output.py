@@ -41,5 +41,7 @@ class Terminal():
             tcolor = bcolors.WARNING
         elif msg_type == 'error':
             tcolor = bcolors.FAIL
+        else:
+            tcolor = bcolors.OKGREEN
 
         print((tcolor + message + bcolors.ENDC))

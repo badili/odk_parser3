@@ -187,7 +187,7 @@ class RawSubmissions(BaseTable):
     is_modified = models.BooleanField(default=0)
     raw_data = JSONField()
     processing_comments = models.CharField(max_length=10000, null=True, blank=True)
-    duration=models.PositiveIntegerField(default=0, null=True, blank=True)
+    duration=models.PositiveBigIntegerField(default=0, null=True, blank=True)
     instance_id=models.PositiveIntegerField(default=0, null=True, blank=True)
 
     class Meta:
@@ -345,13 +345,13 @@ class FormMappings(BaseTable):
 class ProcessingErrors(BaseTable):
     # define the dictionary structure
     err_code = models.IntegerField(db_index=True)
-    err_message = models.TextField()
-    data_uuid = models.CharField(max_length=100, db_index=True, unique=True)
-    err_comments = models.CharField(max_length=1000, null=True)
+    err_message = models.CharField(max_length=2000, null=False, blank=False)
+    data_uuid = models.CharField(max_length=100, db_index=True, unique=False)
+    err_comments = models.CharField(max_length=2000, null=True)
     is_resolved = models.BooleanField(default=False)
+    raw_submission = models.ForeignKey(RawSubmissions, on_delete=models.PROTECT, null=True, blank=True)
 
     class Meta:
-        # unique_together = ('form_group', 'form_question', 'dest_table_name', 'dest_column_name')
         db_table = 'processing_errors'
 
     def publish(self):

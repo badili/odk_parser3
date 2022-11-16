@@ -255,7 +255,6 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while sharing a form with users')
 
-
     def get_audit_log_file(self):
         # The user audit log file is located on the server media folder.
         # There is a table logger_attachment in the database which contains a list of all audit logs and their associated instances
@@ -271,3 +270,17 @@ class Onadata():
         #  The column instance_id corresponds to the _id field of the exported submission
 
         return False
+
+    def get_form_attachment(self, form_id):
+        try:
+            url = '%s/%s%d' % (self.server, self.form_rep, form_id)
+            r = requests.get(url, headers=self.headers)
+            if r.status_code == 200:
+                return r.json()
+            else:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while registering a new profile')

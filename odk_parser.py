@@ -207,6 +207,10 @@ class OdkParser():
             raise Exception('There was an error while fetching new forms from the database...')
 
         for form in all_forms:
+            if hasattr(settings, 'FORMS_OF_INTEREST'):
+                if form['id_string'] not in settings.FORMS_OF_INTEREST:
+                    continue
+
             # check whether the form is already saved in the database
             try:
                 saved_form = ODKForm.objects.get(full_form_id=form['id_string'])
@@ -675,7 +679,7 @@ class OdkParser():
         '''
         Process a label node and returns the proper label of the node
         '''
-        node_type = self.determine_type(t_node['label'])
+        node_type = self.determine_type(t_node['label'] if 'label' in t_node else t_node['name'])
         if node_type == 'is_json':
             try:
                 cur_label = t_node['label'][settings.DEFAULT_LOCALE]
@@ -686,7 +690,7 @@ class OdkParser():
                 cur_label = list(t_node['label'].values())[0]
                 locale = list(t_node['label'].keys())[0]
         elif node_type == 'is_string':
-            cur_label = t_node['label']
+            cur_label = t_node['label'] if 'label' in t_node else t_node['name']
             locale = settings.DEFAULT_LOCALE
         else:
             raise Exception('Cannot determine the type of label that I have got! %s' % json.dumps(t_node['label']))
@@ -1140,7 +1144,7 @@ class OdkParser():
             if is_dry_run:
                 i = i + 1
                 if i > settings.DRY_RUN_RECORDS:
-                    terminal.tprint("\tWe have processed the maximum number of submissions under dry ran settings", 'okblue')
+                    terminal.tprint("\tWe have processed the maximum number of submissions (%d) under dry ran settings" % i, 'okblue')
                     break
             # data, csv_files = self.post_data_processing(data)
             pk_key = self.pk_name + str(self.indexes['main'])
@@ -1387,7 +1391,7 @@ class OdkParser():
 
     def clean_json_key(self, j_key):
         # given a key from ona with data, get the sane(last) part of the key
-        m = re.findall("/?([\.\w]+)$", j_key)
+        m = re.findall("/?([\.\w\-]+)$", j_key)
         return m[0]
 
     def get_clean_data_value(self, cleaners, code):
@@ -2535,6 +2539,29 @@ class OdkParser():
 
         raise Exception('Unknown Destination Column: Encountered a GPS data field (%s), but I cant seem to deduce which type(latitude, longitude, altitude) the current column (%s) is.' % (q_data[sources[0]], column))
 
+    def process_geopoint_node_v1(self, column, gps_string):
+        """
+        v1: Simplifies the processing of the nodes
+        """
+        # split the data by a space as expected from odk
+        geo = gps_string.split()
+
+        # try some guessing game which column we are referring to
+        if re.search('lat', column):
+            # we have a longitude
+            return geo[0]
+        if re.search('lon', column):
+            # we have a longitude
+            return geo[1]
+        if re.search('alt', column):
+            # we have altitude 
+            return geo[2]
+        if re.search('accuracy', column):
+            # we have altitude 
+            return geo[3]
+
+        raise Exception('Unknown Destination Column: Encountered a GPS data field (%s), but I cant seem to deduce which type(latitude, longitude, altitude) the current column (%s) is.' % (gps_string, column))
+
     def validate_data_point(self, regex, data, column):
         try:
             m = re.findall(r'%s' % regex, data)
@@ -2981,10 +3008,13 @@ class OdkParser():
         # eg. my_awesome_name_v1, my_awesome_name_v14
         # we process this and extract the my_awesome_name as form name
         try:
-            if re.match('^(.+)(_v\d+)(_\d+)?$', full_form_id, flags=re.IGNORECASE) is None:
-                raise ValueError("The supplied form id '%s' doesn't conform to the expected pattern like 'my_awesome_name_v14' or 'my_awesome_name_v14_2'" % full_form_id)
+            if hasattr(settings, 'FORMS_HAVE_PROPER_IDS') and settings.FORMS_HAVE_PROPER_IDS == False:
+                form_group_name = full_form_id
+            else:
+                if re.match('^(.+)(_v\d+)(_\d+)?(_\d+)?$', full_form_id, flags=re.IGNORECASE) is None:
+                    raise ValueError("The supplied form id '%s' doesn't conform to the expected pattern like 'my_awesome_name_v14' or 'my_awesome_name_v14_2'" % full_form_id)
+                form_group_name = re.findall('^(.+)(_v\d+)(_\d+)?(_\d+)?$', full_form_id)[0][0]
 
-            form_group_name = re.findall('^(.+)(_v\d+)(_\d+)?$', full_form_id)[0][0]
 
             # check if the group exists first before saving it
             group = ODKFormGroup.objects.filter(group_name=form_group_name).first()
