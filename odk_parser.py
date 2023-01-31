@@ -295,7 +295,7 @@ class OdkParser():
             odk_form = ODKForm.objects.get(form_id=form_id)
 
             if uuids is not None:
-                terminal.tprint('\tWe are only interested in data already saved and we have their uuids: %s' % json.dumps(uuids), 'ok')
+                if settings.DEBUG: terminal.tprint('\tWe are only interested in data already saved and we have their uuids: %s' % json.dumps(uuids), 'ok')
                 # print odk_form.id
                 # we are only interested in data already saved and we have their uuids
                 submissions = RawSubmissions.objects.filter(uuid__in=uuids).filter(form_id=odk_form.id).values('raw_data')
@@ -303,7 +303,7 @@ class OdkParser():
 
             submissions = RawSubmissions.objects.filter(form_id=odk_form.id).values('raw_data')
             if update_local_data is False:
-                terminal.tprint('\tWe dont need to update local database, so lets return what is already saved in the database', 'warn')
+                if settings.DEBUG: terminal.tprint('\tWe dont need to update local database, so lets return what is already saved in the database', 'warn')
                 return submissions
 
             submitted_instances = self.online_submissions_count(form_id)
@@ -338,7 +338,7 @@ class OdkParser():
                     if settings.IS_DRY_RUN:
                         subm_count = subm_count + 1
                         if subm_count > settings.DRY_RUN_RECORDS:
-                            terminal.tprint("\tWe have downloaded our maximum number of submissions under dry ran settings", 'info')
+                            if settings.DEBUG: terminal.tprint("\tWe have downloaded our maximum number of submissions under dry ran settings", 'info')
                             break
 
                     # check if the current uuid is saved in the database
@@ -1048,8 +1048,7 @@ class OdkParser():
 
         # terminal.tprint("\tTotal no of submissions %d" % len(all_submissions), 'ok')
         if len(all_submissions) == 0:
-            terminal.tprint("The form (%s) has no submissions for download" % str(form_name), 'fail')
-            logging.debug("The form (%s) has no submissions for download" % str(form_name))
+            if settings.DEBUG: terminal.tprint("The form (%s) has no submissions for download" % str(form_name), 'fail')
             if download_type == 'download_save':
                 return {'is_downloadable': False, 'error': False, 'message': "The form (%s) has no submissions for download" % str(form_name)}
             elif download_type == 'submissions':
@@ -1102,7 +1101,7 @@ class OdkParser():
         submissions_list = self.get_all_submissions(form_id, uuids, update_local_data)
 
         if submissions_list is None or submissions_list.count() == 0:
-            terminal.tprint("The form with id '%s' has no submissions returning as such" % str(form_id), 'fail')
+            if settings.DEBUG: terminal.tprint("The form with id '%s' has no submissions returning as such" % str(form_id), 'fail')
             return None
 
         try:
