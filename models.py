@@ -117,9 +117,11 @@ class Attribute(BaseTable):
 
 class ODKFormGroup(BaseTable):
     # define the dictionary structure
-    order_index = models.SmallIntegerField(null=True)
+    order_index = models.SmallIntegerField(null=True, blank=True)
     group_name = models.CharField(max_length=100, unique=True)
-    comments = models.CharField(max_length=1000, null=True)
+    form_project = models.CharField(max_length=200, unique=True, null=True)
+    project_id = models.SmallIntegerField(null=True, blank=True)
+    comments = models.CharField(max_length=1000, null=True, blank=True)
 
     class Meta:
         db_table = 'form_groups'
@@ -150,18 +152,18 @@ class SystemSettings(BaseTable):
 
 class ODKForm(BaseTable):
     # Define the structure of the form table
-    form_id = models.IntegerField(unique=True, db_index=True)
+    form_id = models.CharField(max_length=200, unique=True, db_index=True)
     form_group = models.ForeignKey(ODKFormGroup, null=True, on_delete=models.PROTECT)
     form_name = models.CharField(max_length=200, unique=True)
     full_form_id = models.CharField(max_length=200, unique=True)
-    structure = JSONField(null=True)
-    processed_structure = JSONField(null=True)
+    structure = JSONField(null=True, blank=True)
+    processed_structure = JSONField(null=True, blank=True)
     auto_update = models.BooleanField(default=False)
     is_source_deleted = models.BooleanField(default=False)
     no_submissions = models.SmallIntegerField(default=0)
     is_active = models.BooleanField(default=0)
     datetime_published = models.DateTimeField(default=None)
-    latest_upload = models.DateTimeField(default=None)
+    latest_upload = models.DateTimeField(default=None, null=True, blank=True)
 
 
     class Meta:

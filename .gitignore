@@ -102,3 +102,4 @@ ENV/
 
 odk_parser.py.bak
 .DS_Store
+migrations

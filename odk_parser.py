@@ -324,9 +324,15 @@ class OdkParser():
                 terminal.tprint("\tWe have some new submissions, so fetch them from the server and save them offline", 'info')
                 # fetch the submissions and filter by submission time
                 if settings.IS_DRY_RUN:
-                    url = "%s/%s%d.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
+                    if settings.ODK_SERVER == 'onadata':
+                        url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
+                    elif settings.ODK_SERVER == 'odk_central':
+                        url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
                 else:
-                    url = "%s/%s%d.json?sort=%s" % (self.ona_url, self.form_data, form_id, '{"_submission_time":-1}')
+                    if settings.ODK_SERVER == 'onadata':
+                        url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
+                    elif settings.ODK_SERVER == 'odk_central':
+                        url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
 
                 # url = "%s%s%d.json?fields=[\"_uuid\", \"_id\"]" % (self.ona_url, self.form_data, form_id)
                 submission_uuids = self.process_curl_request(url)
@@ -391,20 +397,27 @@ class OdkParser():
     def online_submissions_count(self, form_id):
         # given a form id, process the number of submitted instances
         # terminal.tprint("\tComputing the number of submissions of the form with id '%s'" % form_id, 'info')
-        url = "%s/%s%d?%s" % (self.ona_url, self.form_stats, form_id, "group=&name=time")
-        try:
-            stats = self.process_curl_request(url)
-        except ConnectionError:
-            # in case of a connection error return None
-            return None
+        if settings.ODK_SERVER == 'onadata':
+            url = "%s/%s%d?%s" % (self.ona_url, self.form_stats, form_id, "group=&name=time")
+            try:
+                stats = self.process_curl_request(url)
+            except ConnectionError:
+                # in case of a connection error return None
+                return None
 
-        if stats is None:
-            logger.error("Error while fetching the number of submissions")
-            return None
+            if stats is None:
+                logger.error("Error while fetching the number of submissions")
+                return None
 
-        submissions_count = 0
-        for stat in stats:
-            submissions_count += int(stat['count'])
+            submissions_count = 0
+            for stat in stats:
+                submissions_count += int(stat['count'])
+
+        elif settings.ODK_SERVER == 'odk_central':
+            from .odk_central_parser import OdkCentral
+            central_ = OdkCentral(settings.ODK_URL, settings.ODK_USER, settings.ODK_PASSWORD)
+            form_det = ODKForm.objects.select_related('form_group').get(form_id=form_id)
+            submissions_count = central_.get_submissions_count(form_det.form_group.project_id, form_det.full_form_id)
 
         return submissions_count
 
@@ -490,9 +503,16 @@ class OdkParser():
         Get the structure of the current form
         """
         try:
-            url = "%s/%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
-            terminal.tprint("Fetching the form structure for form with id = %d" % form_id, 'header')
-            form_structure = self.process_curl_request(url)
+            if settings.ODK_SERVER == 'onadata':
+                url = "%s/%s%d/form.json" % (self.ona_url, self.form_rep, form_id)
+                terminal.tprint("Fetching the form structure for form with id = %d" % form_id, 'header')
+                form_structure = self.process_curl_request(url)
+
+            elif settings.ODK_SERVER == 'odk_central':
+                from .odk_central_parser import OdkCentral
+                central_ = OdkCentral(settings.ODK_URL, settings.ODK_USER, settings.ODK_PASSWORD)
+                raw_data = central_.get_form_structure(form_id)
+                self.process_odk_central_form(raw_data)
 
             if form_structure is None:
                 return (None, None)
@@ -988,93 +1008,113 @@ class OdkParser():
             Exception: Description
         """
 
-        # print( "Form ID='%s'; Nodes='%s'; Format='%s'; Download Type='%s'; View Name='%s'; Submission Filters='%s'; UUIDS='%s'" % (form_id, nodes, d_format, download_type, view_name, submission_filters, uuids))
-        view_name = None if view_name == '' else view_name
-        associated_forms = []
         try:
-            cur_form = ODKForm.objects.get(form_id=form_id)
-            if cur_form.form_group_id is None:
-                # we have a form not belonging to a group
-                associated_forms.append(cur_form.form_id)
-                form_name = 'No group defined'
-            else:
-                form_group = ODKFormGroup.objects.get(id=cur_form.form_group_id)
+            # print( "Form ID='%s'; Nodes='%s'; Format='%s'; Download Type='%s'; View Name='%s'; Submission Filters='%s'; UUIDS='%s'" % (form_id, nodes, d_format, download_type, view_name, submission_filters, uuids))
+            view_name = None if view_name == '' else view_name
+            associated_forms = []
 
-                # get all the form ids belonging to the same group
-                temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id)
-                for t_form in temp_forms:
-                    associated_forms.append(t_form.form_id)
-                form_name = form_group.group_name
-        except Exception as e:
-            if settings.DEBUG: print(str(e))
-            if settings.DEBUG: print((traceback.format_exc()))
-            # there is an error getting the associated forms, so get data from just one form
-            terminal.tprint(str(e), 'fail')
-            associated_forms.append(form_id)
-            form_name = "Form%s" % str(form_id)
-            sentry.captureException()
-            logging.info(str(e))
+            if settings.ODK_SERVER == 'onadata':
+                try:
+                    cur_form = ODKForm.objects.get(form_id=form_id)
+                    if cur_form.form_group_id is None:
+                        # we have a form not belonging to a group
+                        associated_forms.append(cur_form.form_id)
+                        form_name = 'No group defined'
+                    else:
+                        form_group = ODKFormGroup.objects.get(id=cur_form.form_group_id)
 
-        # having all the associated form ids, fetch the required data
-        all_submissions = []
+                        # get all the form ids belonging to the same group
+                        temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id)
+                        for t_form in temp_forms:
+                            associated_forms.append(t_form.form_id)
+                        form_name = form_group.group_name
+                except Exception as e:
+                    if settings.DEBUG: print(str(e))
+                    if settings.DEBUG: print((traceback.format_exc()))
+                    # there is an error getting the associated forms, so get data from just one form
+                    terminal.tprint(str(e), 'fail')
+                    associated_forms.append(form_id)
+                    form_name = "Form%s" % str(form_id)
+                    sentry.captureException()
+                    logging.info(str(e))
 
-        # since we shall be merging similar forms as one, declare the indexes here
-        self.cur_node_id = 0
-        self.indexes = {}
-        self.sections_of_interest = {}
-        self.output_structure = {'main': ['unique_id']}
-        self.indexes['main'] = 1
+            elif settings.ODK_SERVER == 'odk_central':
+                # in ODK Central, we don't have concept of associated forms
+                cur_form = ODKForm.objects.get(form_id=form_id)
+                associated_forms.append(form_id)
+                form_name = cur_form.form_name
 
-        for form_id in associated_forms:
-            try:
-                if submission_filters is not None:
-                    if len(submission_filters) == 0:
-                        submission_filters = None
-                this_submissions = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
-            except Exception as e:
-                # logging.debug(traceback.format_exc())
-                # logging.error(str(e))
-                if settings.DEBUG: print((traceback.format_exc()))
-                terminal.tprint(str(e), 'fail')
-                sentry.captureException()
-                # raise Exception(str(e))
-                continue
 
-            if this_submissions is None:
-                continue
-            else:
-                # terminal.tprint("\tCurrent no of submissions %d" % len(this_submissions), 'warn')
-                all_submissions = copy.deepcopy(all_submissions) + copy.deepcopy(this_submissions)
+            # having all the associated form ids, fetch the required data
+            all_submissions = []
 
-        # terminal.tprint("\tTotal no of submissions %d" % len(all_submissions), 'ok')
-        if len(all_submissions) == 0:
-            if settings.DEBUG: terminal.tprint("The form (%s) has no submissions for download" % str(form_name), 'fail')
-            if download_type == 'download_save':
-                return {'is_downloadable': False, 'error': False, 'message': "The form (%s) has no submissions for download" % str(form_name)}
+            # since we shall be merging similar forms as one, declare the indexes here
+            self.cur_node_id = 0
+            self.indexes = {}
+            self.sections_of_interest = {}
+            self.output_structure = {'main': ['unique_id']}
+            self.indexes['main'] = 1
+
+            for form_id in associated_forms:
+                try:
+                    if submission_filters is not None:
+                        if len(submission_filters) == 0:
+                            submission_filters = None
+                    
+                    if settings.ODK_SERVER == 'onadata':
+                        this_submissions = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
+                    elif settings.ODK_SERVER == 'odk_central':
+                        this_submissions = self.get_form_submissions_as_json(form_id, nodes, uuids, update_local_data, is_dry_run, submission_filters)
+
+                except Exception as e:
+                    # logging.debug(traceback.format_exc())
+                    # logging.error(str(e))
+                    if settings.DEBUG: print((traceback.format_exc()))
+                    terminal.tprint(str(e), 'fail')
+                    sentry.captureException()
+                    # raise Exception(str(e))
+                    continue
+
+                if this_submissions is None:
+                    continue
+                else:
+                    # terminal.tprint("\tCurrent no of submissions %d" % len(this_submissions), 'warn')
+                    all_submissions = copy.deepcopy(all_submissions) + copy.deepcopy(this_submissions)
+
+            # terminal.tprint("\tTotal no of submissions %d" % len(all_submissions), 'ok')
+            if len(all_submissions) == 0:
+                if settings.DEBUG: terminal.tprint("The form (%s) has no submissions for download" % str(form_name), 'fail')
+                if download_type == 'download_save':
+                    return {'is_downloadable': False, 'error': False, 'message': "The form (%s) has no submissions for download" % str(form_name)}
+                elif download_type == 'submissions':
+                    return all_submissions
+
+            # check if there is need to create a database view of this data
+            if download_type == 'download_save' or update_local_data:
+                try:
+                    # save the view if we have a view_name
+                    if view_name is not None:
+                        self.save_user_view(form_id, view_name, nodes, all_submissions, self.output_structure, form_group.group_name, update_local_data)
+                except Exception as e:
+                    sentry.captureException()
+                    return {'is_downloadable': False, 'error': True, 'message': str(e)}
             elif download_type == 'submissions':
                 return all_submissions
 
-        # check if there is need to create a database view of this data
-        if download_type == 'download_save' or update_local_data:
-            try:
-                # save the view if we have a view_name
-                if view_name is not None:
-                    self.save_user_view(form_id, view_name, nodes, all_submissions, self.output_structure, form_group.group_name, update_local_data)
-            except Exception as e:
-                sentry.captureException()
-                return {'is_downloadable': False, 'error': True, 'message': str(e)}
-        elif download_type == 'submissions':
-            return all_submissions
-
-        # now we have all the submissions, create the Excel sheet
-        now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        if d_format == 'xlsx':
-            # now lets save the data to an excel file
-            output_name = './' + form_name + '_' + now + '.xlsx'
-            self.save_submissions_as_excel(all_submissions, self.output_structure, output_name)
-            return {'is_downloadable': True, 'filename': output_name}
-        else:
-            return all_submissions
+            # now we have all the submissions, create the Excel sheet
+            now = datetime.now().strftime('%Y%m%d_%H%M%S')
+            if d_format == 'xlsx':
+                # now lets save the data to an excel file
+                output_name = './' + form_name + '_' + now + '.xlsx'
+                self.save_submissions_as_excel(all_submissions, self.output_structure, output_name)
+                return {'is_downloadable': True, 'filename': output_name}
+            else:
+                return all_submissions
+        
+        except Exception as e:
+            if settings.DEBUG: terminal.tprint(str(e), 'fail')
+            sentry.captureException()
+            raise Exception("There was an error while fetching the data. Please contact the system administrator.")
 
     def save_submissions_as_excel(self, submissions, structure, filename):
         writer = ExcelWriter(filename)
@@ -1225,6 +1265,7 @@ class OdkParser():
         # the sheet_name is the name of the sheet where the current data will be saved
         cur_node = {}
 
+        # print('\n%s' % str(node))
         for key, value in six.iteritems(node):
             # clean the key
             clean_key = self.clean_json_key(key)
@@ -1264,11 +1305,16 @@ class OdkParser():
                 is_json = False
             elif val_type == 'is_json':
                 is_json = True
+                # if settings.ODK_SERVER == 'odk_central':
+                #     # print('\n%s' % str(node))
+                #    if clean_key not in self.output_structure:
+                #         self.output_structure[clean_key] = ['unique_id', 'top_id', 'parent_id']
+                #         self.indexes[clean_key] = 1
             elif val_type == 'is_zero':
                 is_json = False
                 value = 0
             elif val_type == 'is_none':
-                terminal.tprint(key, 'warn')
+                # terminal.tprint(key, 'warn')
                 # print(value)
                 is_json = False
                 value = 'N/A'
@@ -1276,19 +1322,32 @@ class OdkParser():
                 is_json = False
 
             if is_json is True:
-                node_value = self.process_node(value, clean_key, nodes_of_interest, add_top_id)
-                cur_node[clean_key] = node_value
+                if settings.ODK_SERVER == 'odk_central':
+                    for n_key, n_value in six.iteritems(value):
+                        n_val_type = self.determine_type(n_value)
+                        n_clean_key = self.clean_json_key(n_key)
 
-                # add this key to the sheet name
-                if clean_key not in self.output_structure[sheet_name]:
-                    self.output_structure[sheet_name].append(clean_key)
+                        if n_val_type == 'is_list':
+                            value = self.process_list(n_value, n_clean_key, node['unique_id'], nodes_of_interest, add_top_id)
+                            cur_node = self.add_data_point(sheet_name, cur_node, n_clean_key, value, do_clean_key=False)
+
+                        elif n_val_type == 'is_json':
+                            value = self.process_list([n_value], n_clean_key, node['unique_id'], nodes_of_interest, add_top_id)
+                            cur_node = self.add_data_point(sheet_name, cur_node, n_clean_key, value, do_clean_key=False)
+                        else:
+                            cur_node = self.add_data_point(sheet_name, cur_node, n_clean_key, n_value, do_clean_key=False)
+
+
+                    # value = self.process_list(value, clean_key, node['unique_id'], nodes_of_interest, add_top_id)
+                    # cur_node = self.add_data_point(sheet_name, cur_node, clean_key, value, do_clean_key=False)
+                else:
+                    node_value = self.process_node(value, clean_key, nodes_of_interest, add_top_id)
+                    # add this key to the sheet name
+                    cur_node = self.add_data_point(sheet_name, cur_node, clean_key, node_value, do_clean_key=False)
+                
             else:
-                node_value = value
-                cur_node[clean_key] = value
-
-                # add this key to the sheet name
-                if clean_key not in self.output_structure[sheet_name]:
-                    self.output_structure[sheet_name].append(clean_key)
+                # add this data point
+                cur_node = self.add_data_point(sheet_name, cur_node, clean_key, value, do_clean_key=False)
 
             """
             if nodes_of_interest is not None:
@@ -1308,7 +1367,20 @@ class OdkParser():
                 if add_top_id is True:
                     cur_node['top_id'] = self.pk_name + str(self.indexes['main'])
 
+        # print('\nProcessed node is:')
+        # print(json.dumps(cur_node))
         return cur_node
+
+    def add_data_point(self, sheet_name, node, new_key, new_value, do_clean_key):
+        """
+        Adds a data point to the current sheet
+        """
+        new_clean_key = self.clean_json_key(new_key) if do_clean_key else new_key
+        if new_clean_key not in self.output_structure[sheet_name]:
+            self.output_structure[sheet_name].append(new_clean_key)
+
+        node[new_clean_key] = new_value
+        return node
 
     def determine_type(self, input):
         """
