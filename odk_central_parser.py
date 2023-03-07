@@ -126,18 +126,22 @@ class OdkCentral():
             response = self.process_curl_request(xml_url, True)
             raw_xml = response.content.decode('utf-8')
 
-            t_submission = RawSubmissions(
-                form=self.cur_form,
-                # it seems some submissions don't have a uuid returned with the submission. Use our previous uuid
-                uuid=subm['instanceId'],
-                duration=0,
-                is_processed=0,
-                is_modified=0,
-                submission_time=subm['createdAt'],
-                raw_data=xmltodict.parse(raw_xml, process_namespaces=True)['data']
-            )
-            t_submission.full_clean()
-            t_submission.save()
+            try:
+                # skip if this submission is already saved
+                RawSubmissions.objects.get(uuid=subm['instanceId'])
+            except RawSubmissions.DoesNotExist:
+                t_submission = RawSubmissions(
+                    form=self.cur_form,
+                    # it seems some submissions don't have a uuid returned with the submission. Use our previous uuid
+                    uuid=subm['instanceId'],
+                    duration=0,
+                    is_processed=0,
+                    is_modified=0,
+                    submission_time=subm['createdAt'],
+                    raw_data=xmltodict.parse(raw_xml, process_namespaces=True)['data']
+                )
+                t_submission.full_clean()
+                t_submission.save()
             # raise Exception('Testing')
 
 

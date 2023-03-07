@@ -273,7 +273,7 @@ class Onadata():
 
     def get_form_attachment(self, form_id):
         try:
-            url = '%s/%s%d' % (self.server, self.form_rep, form_id)
+            url = '%s/%s%s' % (self.server, self.form_rep, str(form_id))
             r = requests.get(url, headers=self.headers)
             if r.status_code == 200:
                 return r.json()

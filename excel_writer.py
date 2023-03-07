@@ -23,14 +23,19 @@ class ExcelWriter():
         self.pending_processing = {}
         self.pending_processing_tmp = {}
         self.sorted_sheet_fields = {}
+        self.sheet_attrs = {}
+        self.sheet_attr_names = []
 
-    def create_workbook(self, data, structure):
+    def create_workbook(self, data, structure, sheet_attrs, sheet_attr_names):
         # given the data as json and the structure as json too, create a workbook with this data
 
         self.wb = Workbook()
+        self.sheet_attrs = sheet_attrs
+        self.sheet_attr_names = sheet_attr_names
+        print(sheet_attrs)
         # order the fields for proper display
         for sheet_name, sheet_fields in six.iteritems(structure):
-            self.sorted_sheet_fields[sheet_name] = self.order_fields(sheet_fields)
+            self.sorted_sheet_fields[sheet_name] = self.order_fields(sheet_fields, sheet_attr_names)
 
         self.pending_processing['main'] = {'data': data, 'is_processed': False}
 
@@ -68,7 +73,12 @@ class ExcelWriter():
                 try:
                     cur_value = record[field]
                 except KeyError:
-                    cur_value = '-'
+                    if field in self.sheet_attr_names:
+                        # we have the data in the main attrs
+                        item_pk = 'top_id' if 'top_id' in record.keys() else 'unique_id'
+                        cur_value = self.sheet_attrs[record[item_pk]][field]
+                    else:
+                        cur_value = '-'
 
                 if isinstance(cur_value, list) is True:
                     # defer processing
@@ -110,8 +120,14 @@ class ExcelWriter():
                 for row in cur_records:
                     writer.writerow([s for s in row])
 
-    def order_fields(self, fields):
+    def order_fields(self, fields, add_fields):
         fields.sort()
+
+        # add the sheet attributes at the begining if we have them
+        for f_ in add_fields:
+            if f_ in fields:
+                fields.remove(f_)
+                fields.insert(0, f_)
 
         # remove the parent_id if its there and append it at the begining
         if 'parent_id' in fields:

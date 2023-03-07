@@ -323,19 +323,23 @@ class OdkParser():
                 # we have some new submissions, so fetch them from the server and save them offline
                 terminal.tprint("\tWe have some new submissions, so fetch them from the server and save them offline", 'info')
                 # fetch the submissions and filter by submission time
-                if settings.IS_DRY_RUN:
-                    if settings.ODK_SERVER == 'onadata':
-                        url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
-                    elif settings.ODK_SERVER == 'odk_central':
-                        url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
-                else:
-                    if settings.ODK_SERVER == 'onadata':
-                        url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
-                    elif settings.ODK_SERVER == 'odk_central':
-                        url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
 
-                # url = "%s%s%d.json?fields=[\"_uuid\", \"_id\"]" % (self.ona_url, self.form_data, form_id)
-                submission_uuids = self.process_curl_request(url)
+
+                if settings.ODK_SERVER == 'onadata':
+                    if settings.IS_DRY_RUN:
+                        url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
+                    else:
+                        url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
+                    submission_uuids = self.process_curl_request(url)
+                elif settings.ODK_SERVER == 'odk_central':
+                    # need to improve this section.....
+                    # from .odk_central_parser import OdkCentral
+                    # central_ = OdkCentral(settings.ODK_URL, settings.ODK_USER, settings.ODK_PASSWORD)
+                    # form_det = ODKForm.objects.select_related('form_group').get(form_id=form_id)
+                    # submissions_count = central_.get_submissions_count(form_det.form_group.project_id, form_det.full_form_id)
+
+                    submission_uuids = []
+
 
                 if settings.IS_DRY_RUN:
                     subm_count = 0
@@ -1047,12 +1051,18 @@ class OdkParser():
 
             # having all the associated form ids, fetch the required data
             all_submissions = []
+            all_submissions_attrs = {}
 
             # since we shall be merging similar forms as one, declare the indexes here
             self.cur_node_id = 0
             self.indexes = {}
-            self.sections_of_interest = {}
-            self.output_structure = {'main': ['unique_id']}
+            if hasattr(settings, 'FORMS_MAIN_COLS'):
+                for fid, fcols in settings.FORMS_MAIN_COLS.items():
+                    if fid in associated_forms:
+                        settings.ADD_MAIN_COLS = fcols
+                        break
+
+            self.output_structure = { 'main': ['unique_id'] + settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else [] }
             self.indexes['main'] = 1
 
             for form_id in associated_forms:
@@ -1062,9 +1072,9 @@ class OdkParser():
                             submission_filters = None
                     
                     if settings.ODK_SERVER == 'onadata':
-                        this_submissions = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
+                        (this_submissions, submissions_attrs) = self.get_form_submissions_as_json(int(form_id), nodes, uuids, update_local_data, is_dry_run, submission_filters)
                     elif settings.ODK_SERVER == 'odk_central':
-                        this_submissions = self.get_form_submissions_as_json(form_id, nodes, uuids, update_local_data, is_dry_run, submission_filters)
+                        (this_submissions, submissions_attrs) = self.get_form_submissions_as_json(form_id, nodes, uuids, update_local_data, is_dry_run, submission_filters)
 
                 except Exception as e:
                     # logging.debug(traceback.format_exc())
@@ -1080,6 +1090,7 @@ class OdkParser():
                 else:
                     # terminal.tprint("\tCurrent no of submissions %d" % len(this_submissions), 'warn')
                     all_submissions = copy.deepcopy(all_submissions) + copy.deepcopy(this_submissions)
+                    all_submissions_attrs = {**all_submissions_attrs, **submissions_attrs}
 
             # terminal.tprint("\tTotal no of submissions %d" % len(all_submissions), 'ok')
             if len(all_submissions) == 0:
@@ -1106,7 +1117,7 @@ class OdkParser():
             if d_format == 'xlsx':
                 # now lets save the data to an excel file
                 output_name = './' + form_name + '_' + now + '.xlsx'
-                self.save_submissions_as_excel(all_submissions, self.output_structure, output_name)
+                self.save_submissions_as_excel(all_submissions, all_submissions_attrs, self.output_structure, output_name)
                 return {'is_downloadable': True, 'filename': output_name}
             else:
                 return all_submissions
@@ -1116,9 +1127,10 @@ class OdkParser():
             sentry.captureException()
             raise Exception("There was an error while fetching the data. Please contact the system administrator.")
 
-    def save_submissions_as_excel(self, submissions, structure, filename):
+    def save_submissions_as_excel(self, submissions, submissions_attrs, structure, filename):
         writer = ExcelWriter(filename)
-        writer.create_workbook(submissions, structure)
+        add_main_cols = settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else []
+        writer.create_workbook(submissions, structure, submissions_attrs, add_main_cols)
 
     def get_form_submissions_as_json(self, form_id, screen_nodes, uuids=None, update_local_data=True, is_dry_run=True, submission_filters=None):
         """Given a form id get the form submissions
@@ -1173,6 +1185,7 @@ class OdkParser():
             screen_nodes = list(set(screen_nodes))
 
         submissions = []
+        submissions_attrs = {}
         if submission_filters is not None:
             # create a dictionary which will contain the details of the filters, ie, the short_field_name, full_field_name and the filter criteria
             # terminal.tprint("\tWe are going to filter the data using the criteria: "+ json.dumps(submission_filters), 'debug')
@@ -1188,7 +1201,7 @@ class OdkParser():
             # data, csv_files = self.post_data_processing(data)
             pk_key = self.pk_name + str(self.indexes['main'])
             # terminal.tprint(json.dumps(data), 'okblue')
-            # terminal.tprint(json.dumps(data), 'warn')
+            # if is_dry_run: terminal.tprint(json.dumps(data), 'warn')
 
             if self.determine_type(data) == 'is_json' and 'raw_data' in data:
                 # terminal.tprint('Is postgres db', 'okblue')
@@ -1227,12 +1240,16 @@ class OdkParser():
                     # though shall not pass, you have failed the filter criteria
                     continue
 
+            if hasattr(settings, 'ADD_MAIN_COLS'):
+                self.cur_add_cols_data = {}
+
             data = self.process_node(data, 'main', screen_nodes, True)
+            if hasattr(settings, 'ADD_MAIN_COLS'): submissions_attrs[pk_key] = self.cur_add_cols_data
 
             submissions.append(data)
             self.indexes['main'] += 1
 
-        return submissions
+        return submissions, submissions_attrs
 
     def determine_submission_filtering(self, data, filters):
         # given the data and the filter criteria, determine if this submission should be included in the final dataset
@@ -1344,24 +1361,10 @@ class OdkParser():
                     node_value = self.process_node(value, clean_key, nodes_of_interest, add_top_id)
                     # add this key to the sheet name
                     cur_node = self.add_data_point(sheet_name, cur_node, clean_key, node_value, do_clean_key=False)
-                
             else:
                 # add this data point
                 cur_node = self.add_data_point(sheet_name, cur_node, clean_key, value, do_clean_key=False)
 
-            """
-            if nodes_of_interest is not None:
-                # at this point, we have our data, no need to check if we have the right key
-                terminal.tprint("\tAdding the processed node (%s)" % clean_key, 'ok')
-                if clean_key not in self.sections_of_interest:
-                    self.sections_of_interest[clean_key] = []
-
-                if isinstance(node_value, list):
-                    for node_item in node_value:
-                        self.sections_of_interest[clean_key].append(node_item)
-                else:
-                    self.sections_of_interest[clean_key].append(node_value)
-            """
             if len(cur_node) != 0:
                 # logger.info('%s: Found something in the current node' % clean_key)
                 if add_top_id is True:
@@ -1380,6 +1383,11 @@ class OdkParser():
             self.output_structure[sheet_name].append(new_clean_key)
 
         node[new_clean_key] = new_value
+
+        if hasattr(settings, 'ADD_MAIN_COLS'):
+            if new_clean_key in settings.ADD_MAIN_COLS:
+                self.cur_add_cols_data[new_clean_key] = new_value
+        
         return node
 
     def determine_type(self, input):
@@ -1429,7 +1437,7 @@ class OdkParser():
 
         # the sheet name is where to put this subset of data
         if sheet_name not in self.output_structure:
-            self.output_structure[sheet_name] = ['unique_id', 'top_id', 'parent_id']
+            self.output_structure[sheet_name] = ['unique_id', 'top_id', 'parent_id'] + settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else []
             self.indexes[sheet_name] = 1
 
         cur_list = []
