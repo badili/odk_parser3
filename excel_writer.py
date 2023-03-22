@@ -32,7 +32,7 @@ class ExcelWriter():
         self.wb = Workbook()
         self.sheet_attrs = sheet_attrs
         self.sheet_attr_names = sheet_attr_names
-        print(sheet_attrs)
+        # print(sheet_attrs)
         # order the fields for proper display
         for sheet_name, sheet_fields in six.iteritems(structure):
             self.sorted_sheet_fields[sheet_name] = self.order_fields(sheet_fields, sheet_attr_names)
@@ -142,3 +142,8 @@ class ExcelWriter():
         fields.insert(0, 'unique_id')
 
         return fields
+
+
+
+
+

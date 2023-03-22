@@ -10,6 +10,8 @@ import copy
 import subprocess
 import hashlib
 
+import pandas as pd
+
 from datetime import datetime
 from collections import defaultdict, OrderedDict
 from contextlib import suppress
@@ -26,7 +28,11 @@ from django.http import HttpRequest
 
 from .terminal_output import Terminal
 from .excel_writer import ExcelWriter
-from .models import ODKForm, RawSubmissions, FormViews, ViewsData, ViewTablesLookup, DictionaryItems, FormMappings, ProcessingErrors, ODKFormGroup, SystemSettings
+if settings.SITE_NAME == 'Pazuri Records':
+    from .models import RawSubmissions, FormViews, ViewsData, ViewTablesLookup, DictionaryItems, FormMappings, ProcessingErrors, ODKFormGroup, SystemSettings
+    from poultry.models import ODKForm
+else:
+    from .models import ODKForm, RawSubmissions, FormViews, ViewsData, ViewTablesLookup, DictionaryItems, FormMappings, ProcessingErrors, ODKFormGroup, SystemSettings
 import six
 from six.moves import range
 from six.moves import zip
@@ -56,7 +62,7 @@ request = HttpRequest()
 
 
 class OdkParser():
-    def __init__(self, ona_user=None, ona_password=None, ona_token=None):
+    def __init__(self, ona_user=None, ona_password=None, ona_token=None, farm_id=None):
         terminal.tprint("Initializing the core ODK parser", 'ok')
 
         global sentry
@@ -77,6 +83,9 @@ class OdkParser():
             self.ona_password = ona_password
             self.ona_api_token = ona_token
             self.ona_url = settings.ONADATA_URL
+
+        if settings.SITE_NAME == 'Pazuri Records':
+            self.cur_farm_id = farm_id
 
         # load the destination database
         self.load_mapped_connection()
@@ -189,7 +198,7 @@ class OdkParser():
         try:
             url = "%s/%s" % (self.ona_url, self.api_all_forms)
             all_forms = self.process_curl_request(url)
-            # terminal.tprint(json.dumps(all_forms), 'fail')
+            terminal.tprint(json.dumps(all_forms), 'fail')
             if all_forms is None:
                 if settings.DEBUG: print(("Error while executing the API request %s" % url))
                 return
@@ -213,11 +222,17 @@ class OdkParser():
 
             # check whether the form is already saved in the database
             try:
-                saved_form = ODKForm.objects.get(full_form_id=form['id_string'])
+                # if settings.SITE_NAME == 'Pazuri Records':
+                #     saved_form = ODKForm.objects.filter(full_form_id=form['id_string'], farm_id=self.cur_farm_id).get()
+                # else:
+                #     saved_form = ODKForm.objects.get(full_form_id=form['id_string'])
+
+                saved_form = ODKForm.objects.get(form_id=form['formid'])
                 terminal.tprint("The form '%s' is already saved in the database" % saved_form.form_name, 'ok')
                 if saved_form.no_submissions != form['num_of_submissions']:
                     saved_form.no_submissions = form['num_of_submissions']
                     saved_form.latest_upload = form['last_updated_at']
+                    saved_form.datetime_published = datetime.strptime(form['date_created'], '%Y-%m-%dT%H:%M:%S.%f%z')
                     saved_form.save()
                 
                 to_return.append({'title': saved_form.form_name, 'id': saved_form.form_id, 'full_id': saved_form.full_form_id})
@@ -245,6 +260,9 @@ class OdkParser():
                         datetime_published=datetime.strptime(form['date_created'], '%Y-%m-%dT%H:%M:%S.%f%z'),
                         latest_upload=datetime.strptime(form['last_updated_at'], '%Y-%m-%dT%H:%M:%S.%f%z')
                     )
+                    if settings.SITE_NAME == 'Pazuri Records':
+                        cur_form.farm_id = self.cur_farm_id
+
                     cur_form.publish()
                 except FieldDoesNotExist:
                     cur_form = ODKForm(
@@ -429,7 +447,7 @@ class OdkParser():
         """
         check whether the form structure is already saved in the DB
         """
-        terminal.tprint("Fetching form with id %d" % form_id, 'warn')
+        terminal.tprint("Fetching form with id %s" % str(form_id), 'warn')
         try:
             cur_form = ODKForm.objects.get(form_id=form_id)
 
@@ -459,7 +477,7 @@ class OdkParser():
                 # We are expecting the processed_structure as a list of json and the structure as a json
                 struct_type = self.determine_type(cur_form.processed_structure)
 
-                terminal.tprint('The processed structure type is -- %s' % struct_type, 'fail')
+                # terminal.tprint('The processed structure type is -- %s' % struct_type, 'fail')
                 if(struct_type == 'is_string'):
                     processed_nodes = cur_form.processed_structure
 
@@ -515,8 +533,11 @@ class OdkParser():
             elif settings.ODK_SERVER == 'odk_central':
                 from .odk_central_parser import OdkCentral
                 central_ = OdkCentral(settings.ODK_URL, settings.ODK_USER, settings.ODK_PASSWORD)
-                raw_data = central_.get_form_structure(form_id)
-                self.process_odk_central_form(raw_data)
+                form_structure = central_.get_form_structure(form_id)
+
+                # once there is the form structure, then at this stage is to create the tree for jqxWidget
+                # so to avoid a more serious bug, setting this as None
+                form_structure = None
 
             if form_structure is None:
                 return (None, None)
@@ -1131,6 +1152,18 @@ class OdkParser():
         writer = ExcelWriter(filename)
         add_main_cols = settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else []
         writer.create_workbook(submissions, structure, submissions_attrs, add_main_cols)
+
+    def process_write_dictionary(self, form_id):
+        # this function assumes that the form dictionary items are already extracted and saved in the database
+        dict_items = list(DictionaryItems.objects.filter(form_group=form_id).values('t_key', 't_type', 't_value').all())
+        cur_form = ODKForm.objects.get(form_id=form_id)
+        output_name = './' + cur_form.form_name + ' - Dictionary' + '.xlsx'
+        df = pd.DataFrame(dict_items)
+        df.rename(columns={'t_key': 'Key', 't_type': 'Question Type', 't_value': 'Displayed Text'}, inplace=True)
+        df.to_excel(output_name)
+
+        return output_name
+
 
     def get_form_submissions_as_json(self, form_id, screen_nodes, uuids=None, update_local_data=True, is_dry_run=True, submission_filters=None):
         """Given a form id get the form submissions

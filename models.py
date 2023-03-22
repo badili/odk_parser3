@@ -15,53 +15,6 @@ elif settings.DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql_p
     from django.contrib.postgres.fields import JSONField
 
 
-class Profile(models.Model):
-    """
-    The Profile class that adds attributes to the default auth user.
-    """
-    # Remove the base_dir from the profile photo directory
-    profile_photo_dir = settings.PROFILE_PHOTO_DIR
-    base_dir = settings.BASE_DIR
-    profile_photo_dir = profile_photo_dir.replace(base_dir + '/', '').strip()
-
-    # user = models.OneToOneField(User, on_delete=models.PROTECT)
-    user = get_user_model()
-    photo = ThumbnailerImageField(upload_to=profile_photo_dir, blank=True)
-    salutation = models.CharField(max_length=20, blank=True, default='Dear')
-    phone = models.CharField(max_length=20, blank=True, default='')
-    city = models.CharField(max_length=60, default='', blank=True)
-    country = models.CharField(max_length=100, default='', blank=True)
-    organization = models.CharField(max_length=100, default='', blank=True)
-    bio = models.TextField(max_length=100, default='', blank=True)
-    profession = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        verbose_name = 'profile'
-        db_table = 'profile'
-        verbose_name_plural = 'profiles'
-
-    def save(self, *args, **kwargs):
-        if not self.pk:
-            try:
-                p = Profile.objects.get(user=self.user)
-                self.pk = p.pk
-            except Profile.DoesNotExist:
-                pass
-
-        super(Profile, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return self.user.username
-
-
-@receiver(post_save, sender=User)
-def create_or_update_user_profile(sender, instance, created, **kwargs):
-    print(instance)
-    if created:
-        Profile.objects.create(user=instance)
-    # instance.profile.save()
-
-
 class BaseTable(models.Model):
     """
     Base abstract table to be inherited by all other tables
@@ -154,8 +107,8 @@ class ODKForm(BaseTable):
     # Define the structure of the form table
     form_id = models.CharField(max_length=200, unique=True, db_index=True)
     form_group = models.ForeignKey(ODKFormGroup, null=True, on_delete=models.PROTECT)
-    form_name = models.CharField(max_length=200, unique=True)
-    full_form_id = models.CharField(max_length=200, unique=True)
+    form_name = models.CharField(max_length=200)
+    full_form_id = models.CharField(max_length=200, db_index=True)
     structure = JSONField(null=True, blank=True)
     processed_structure = JSONField(null=True, blank=True)
     auto_update = models.BooleanField(default=False)
@@ -164,7 +117,6 @@ class ODKForm(BaseTable):
     is_active = models.BooleanField(default=0)
     datetime_published = models.DateTimeField(default=None)
     latest_upload = models.DateTimeField(default=None, null=True, blank=True)
-
 
     class Meta:
         db_table = 'odkform'
@@ -279,11 +231,11 @@ class ImagesLookup(models.Model):
 class DictionaryItems(BaseTable):
     # define the dictionary structure
     form_group = models.CharField(max_length=100, db_index=True)
-    parent_node = models.CharField(max_length=100, db_index=True, null=True)
+    parent_node = models.CharField(max_length=100, db_index=True, null=True, blank=True)
     t_key = models.CharField(max_length=100, db_index=True)
     t_locale = models.CharField(max_length=50)
     t_type = models.CharField(max_length=30, db_index=True)
-    t_value = models.CharField(max_length=1000)
+    t_value = models.CharField(max_length=2000)
 
     class Meta:
         unique_together = ('form_group', 'parent_node', 't_key')
@@ -361,3 +313,51 @@ class ProcessingErrors(BaseTable):
 
     def get_id(self):
         return self.t_key
+
+
+# putting this last to avoid circular dependacies
+class Profile(models.Model):
+    """
+    The Profile class that adds attributes to the default auth user.
+    """
+    # Remove the base_dir from the profile photo directory
+    profile_photo_dir = settings.PROFILE_PHOTO_DIR
+    base_dir = settings.BASE_DIR
+    profile_photo_dir = profile_photo_dir.replace(base_dir + '/', '').strip()
+
+    # user = models.OneToOneField(User, on_delete=models.PROTECT)
+    user = get_user_model()
+    photo = ThumbnailerImageField(upload_to=profile_photo_dir, blank=True)
+    salutation = models.CharField(max_length=20, blank=True, default='Dear')
+    phone = models.CharField(max_length=20, blank=True, default='')
+    city = models.CharField(max_length=60, default='', blank=True)
+    country = models.CharField(max_length=100, default='', blank=True)
+    organization = models.CharField(max_length=100, default='', blank=True)
+    bio = models.TextField(max_length=100, default='', blank=True)
+    profession = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        verbose_name = 'profile'
+        db_table = 'profile'
+        verbose_name_plural = 'profiles'
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            try:
+                p = Profile.objects.get(user=self.user)
+                self.pk = p.pk
+            except Profile.DoesNotExist:
+                pass
+
+        super(Profile, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return self.user.username
+
+
+@receiver(post_save, sender=User)
+def create_or_update_user_profile(sender, instance, created, **kwargs):
+    print(instance)
+    if created:
+        Profile.objects.create(user=instance)
+    # instance.profile.save()

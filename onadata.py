@@ -31,6 +31,9 @@ class Onadata():
         self.initiate_paswd_reset = 'api/v1/user/reset_url'
         self.finalize_paswd_reset = 'api/v1/user/reset'
         self.share_url = 'api/v1/forms/%d/share'
+        self.user = 'api/v1/user'
+        self.project_forms = 'api/v1/projects/%d/forms'
+        self.change_password = 'api/v1/profiles/%s/change_password'
         # self.reset_url = '%s/%s' % (self.server, 'reset_form')
         # this is hardccoded by ona
         self.reset_url = 'http://testdomain.com/reset_form'
@@ -61,6 +64,7 @@ class Onadata():
         if settings.DEBUG: print('Registering a new user')
         try:
             url = '%s/%s' % (self.server, 'api/v1/profiles')
+            # print('Executing the url %s' % url)
             r = requests.post(url, user_details, headers=self.headers)
             if r.status_code == 201:
                 return r.json()
@@ -73,15 +77,17 @@ class Onadata():
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
 
-    def register_organization(self, org_details):
+    def register_organization(self, org_details, api_token):
         """
         Register a new project
         """
-        print('Registering a new organization')
+        if settings.DEBUG: print('Registering a new organization')
         # requires admin privileges
         try:
             url = '%s%s' % (self.server, 'api/v1/projects')
-            r = requests.post(url, project_details, headers=self.headers)
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            r = requests.post(url, org_details, headers=xls_headers)
+            if settings.DEBUG: print(r.json())
             if r.status_code == 201:
                 return r.json()
             else:
@@ -90,16 +96,18 @@ class Onadata():
         except Exception as e:
             if settings.DEBUG: print((traceback.format_exc()))
             sentry.captureException()
-            raise Exception('There was an error while registering a new profile')
+            raise Exception('There was an error while registering a new organization')
 
-    def create_project(self, project_details):
+    def create_project(self, project_details, api_token):
         """
         Register a new project
         """
-        print('Registering a new project')
+        if settings.DEBUG: print('Registering a new project')
         try:
             url = '%s%s' % (self.server, 'api/v1/projects')
-            r = requests.post(url, project_details, headers=self.headers)
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            r = requests.post(url, project_details, headers=xls_headers)
+            if settings.DEBUG: print(r.json())
             if r.status_code == 201:
                 return r.json()
             else:
@@ -114,8 +122,9 @@ class Onadata():
         # for all projects which are downloadable, upload the new itemsets.csv
         # print('uploading an itemsets csv')
         try:
-            url = "%s%s" % (self.server, self.api_all_forms)
+            url = "%s/%s" % (self.server, self.api_all_forms)
             all_forms = self.process_curl_request(url)
+            if settings.DEBUG: terminal.tprint('Checking all forms -- %s' % url, 'debug')
             # terminal.tprint(json.dumps(all_forms), 'fail')
             if all_forms is None:
                 raise Exception(("Error while executing the API request %s" % url))
@@ -125,8 +134,8 @@ class Onadata():
 
                 # check if the form id matches one of our form prefixes
                 z = lambda x: re.match(x, form['id_string'])
-                # if settings.DEBUG: print("\nEvaluating %s" % form['id_string'])
-                # if settings.DEBUG: print(list(map(z, form_prefixes)))
+                if settings.DEBUG: print("\nEvaluating %s" % form['id_string'])
+                if settings.DEBUG: print(list(map(z, form_prefixes)))
                 if len(list(filter(None, map(z, form_prefixes)))) == 0: continue            # the form is not in our list
 
                 # if settings.DEBUG: print("Updating %s" % form['id_string'])
@@ -135,7 +144,7 @@ class Onadata():
                 # print("\n\nupdating %s %s" % (form['id_string'], resource_name))
 
                 # check if we have metadata
-                meta_url = '%s%s?xform=%s' % (self.server, self.metadata_uri, form['formid'])
+                meta_url = '%s/%s?xform=%s' % (self.server, self.metadata_uri, form['formid'])
                 meta_r = requests.get(meta_url, headers=self.headers)
                 # print("Fetching meta response code %s" % meta_r.status_code)
                 if meta_r.status_code != 200:
@@ -146,7 +155,7 @@ class Onadata():
                     if form_meta['data_value'] == resource_name:
                         # we need to delete this media
                         # print("We found an old media, '%s', deleting it..." % form_meta['data_value'])
-                        delete_url = '%s%s/%s' % (self.server, self.metadata_uri, form_meta['id'])
+                        delete_url = '%s/%s/%s' % (self.server, self.metadata_uri, form_meta['id'])
                         # to delete a metadata, I need super privileges, something I can't figure out for now
                         # so lets use the master token
                         master_headers = {'Authorization': "Token %s" % settings.ONADATA_MASTER}
@@ -158,7 +167,7 @@ class Onadata():
                 
                 # print("Deleting response code %s" % del_r.status_code)
 
-                url = '%s%s' % (self.server, self.metadata_uri)
+                url = '%s/%s' % (self.server, self.metadata_uri)
                 itemsets = {'data_file': open(file_name, 'rt')}
                 payload = {'data_type': 'media', 'data_value': resource_name, 'xform': form['formid']}
 
@@ -284,3 +293,76 @@ class Onadata():
             if settings.DEBUG: print((traceback.format_exc()))
             sentry.captureException()
             raise Exception('There was an error while registering a new profile')
+
+    def publish_xls_form(self, xls_path, owner_username, api_token):
+        try:
+            url = '%s/%s' % (self.server, self.api_all_forms)
+            itemsets = {'xls_file': open(xls_path, 'rb')}
+            payload = {'owner': owner_username}
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            print('Executing the url %s' % url)
+
+            r = requests.get(url, files=itemsets, data=payload, headers=xls_headers)
+            print(r.status_code)
+            print(r.json())
+
+            if r.status_code == 200:
+                return r.json()
+            else:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while publishing the XLS form')
+
+    def publish_project_xls_form(self, xls_path, project_url, api_token):
+        try:
+            if settings.DEBUG: print('Publishing a form to a project')
+            url = '%s/forms' % project_url
+            itemsets = {'xls_file': open(xls_path, 'rb')}
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            if settings.DEBUG: print('Executing the url %s' % url)
+
+            r = requests.post(url, files=itemsets, headers=xls_headers)
+            if r.status_code == 201:  # created
+                return r.json()
+            else:
+                terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
+                raise Exception(r.text)
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while publishing the XLS form')
+
+    def get_user_token(self, username, user_password, api_token):
+        '''
+        Getting the user token is not a straightforward thing
+        There is a hack to this by changing the user password, we get the new token
+        So we 1st change the password to a temp password, then revert it back to the set password
+        On reverting it back, we get the token
+        '''
+        try:
+            url = '%s/%s' % (self.server, self.change_password % username)
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            new_password = '%s%s' % (user_password, '123')
+            payload = {'current_password': user_password, 'new_password': new_password}
+            print('Executing dummy password url %s' % url)
+
+            r = requests.post(url, data=payload, headers=xls_headers)
+            if r.status_code != 200:
+                raise Exception('There was an error while setting a new user password')
+
+            payload = {'current_password': new_password, 'new_password': user_password}
+            print('Reseting the real password -- %s' % url)
+            r = requests.post(url, data=payload, headers=xls_headers)
+            if r.status_code != 200:
+                raise Exception('There was an error while re-setting user password')
+            user_details = r.json()
+            return user_details['access_token']
+
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while getting the user token')
+

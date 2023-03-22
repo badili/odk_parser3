@@ -6,8 +6,9 @@ import xmltodict
 import six
 
 from django.conf import settings
+from django.db import transaction
 
-from .models import ODKFormGroup, ODKForm, RawSubmissions
+from .models import ODKFormGroup, ODKForm, RawSubmissions, DictionaryItems
 
 from .terminal_output import Terminal
 terminal = Terminal()
@@ -23,10 +24,22 @@ class OdkCentral():
     submission_count = '%(url)s/v1/projects/%(project_id)d/forms/%(form_name)s.svc/Submissions?$top=0&$count=true'
     form_structure = '%(url)s/v1/projects/%(project_id)d/forms/%(form_id)s.xml'
 
+    # xform important node attrs
+    node_attrs = {
+        'input': 'http://www.w3.org/2002/xforms:input',
+        'select': 'http://www.w3.org/2002/xforms:select',
+        'select1': 'http://www.w3.org/2002/xforms:select1',
+        'group': 'http://www.w3.org/2002/xforms:group',
+        'repeat': 'http://www.w3.org/2002/xforms:repeat',
+    }
+    ignore_attrs = ['class', 'appearance']
+    ignored_qtypes = ['calculate', 'binary']
+
     def __init__(self, server_url, app_username, app_password):
         self.server_url = server_url
         self.app_username = app_username
         self.app_password = app_password
+        self.level_count = None
 
         # try and validate the credentials
         try:
@@ -207,24 +220,156 @@ class OdkCentral():
         response = self.process_curl_request(xml_url, True)
         raw_xml = response.content.decode('utf-8')
         raw_data = xmltodict.parse(raw_xml, process_namespaces=True)
-        self.process_odk_central_form(raw_data)
+
+        transaction.set_autocommit(False)
+
+        self.level_count = 0
+        form_struct = self.process_odk_central_form(raw_data)
+        self.save_form_dictionary(form_struct, form_id)
+
+        # save this structure
+        cur_odk_form = ODKForm.objects.get(form_id=form_id)
+        cur_odk_form.structure = raw_data
+        cur_odk_form.processed_structure = form_struct
+        cur_odk_form.save()
+        transaction.commit()
 
     def process_odk_central_form(self, raw_data):
-        raw_structure = raw_data['http://www.w3.org/1999/xhtml:html']['http://www.w3.org/1999/xhtml:body']
-        for key, value in six.iteritems(raw_structure):
-            clean_key = self.clean_json_key(key)
-            if clean_key == 'class': continue
-            self.process_form_node(clean_key, clean_key, value)
+        # get all the question types first and then add the other details
+        raw_structure = raw_data['http://www.w3.org/1999/xhtml:html']
+        form_struct = self.extract_top_structure(raw_structure)
 
-    def process_form_node(self, node_type, n_key, node_items):
-        for cur_key, cur_value in node_items:
-            print(cur_value)
+        # our xform has distinct parts input, group, select, select1, upload
+        top_body_struct = raw_structure['http://www.w3.org/1999/xhtml:body']
+        for node_key, node_value in top_body_struct.items():
+            node_type = self.clean_json_key(node_key)
+            if node_type == 'class': continue
+            form_struct = self.process_form_node(node_type, node_value, form_struct)
+
+        # terminal.tprint(json.dumps(form_struct), 'fail')
+        return form_struct
+
+    def extract_top_structure(self, raw_data):
+        # extract the top structure of the form
+        top_struct = raw_data['http://www.w3.org/1999/xhtml:head']['http://www.w3.org/2002/xforms:model']['http://www.w3.org/2002/xforms:bind']
+        form_struct = { '_all_choices': {} }
+
+        for item_ in top_struct:
+            if '@type' not in item_: continue
+            clean_key = self.clean_json_key(item_['@nodeset'])
+
+            if item_['@type'] == 'string':
+                if '@calculate' in item_.keys():
+                    node_type = 'calculate'
+                else:
+                    node_type = 'string'
+            else:
+                node_type = item_['@type']
+
+            '''
+            if clean_key == 's0q3_survey_date':
+                print(clean_key)
+                terminal.tprint(json.dumps(item_), 'warning')
+                raise Exception('Gotcha key!!')
+            '''
+
+            if clean_key in form_struct:
+                raise Exception("Duplicate key '%s' extracted from '%s'. The dictionary will be compromised!" % (clean_key, item_['@nodeset']))
+
+            form_struct[clean_key] = {'type': node_type}
+
+        return form_struct
+
+    def process_form_node(self, node_type, node_, form_struct):
+        # for each node we have a @ref which is the key in our form_struct
+
+        # at times we get a dict as the node and not a list... so convert it to a list
+        nodes_ = [node_] if isinstance(node_, dict) else node_
+        for cur_node in nodes_:
+            '''
+            raw_node = json.dumps(cur_node)
+            if raw_node.find('s3c2_cur_training_name') != -1:
+                terminal.tprint(raw_node, 'fail')
+                raise Exception('Gotcha!')
+            '''
+
+            if node_type not in ('repeat'):
+                clean_ref = self.clean_json_key(cur_node['@ref'])
+                # print(clean_ref)
+                if clean_ref not in form_struct:
+                    # add it in the structure
+                    form_struct[clean_ref] = {'type': node_type}
+
+                if 'http://www.w3.org/2002/xforms:output' in cur_node['http://www.w3.org/2002/xforms:label']:
+                    ref_label = cur_node['http://www.w3.org/2002/xforms:label']['#text']
+                else:
+                    ref_label = cur_node['http://www.w3.org/2002/xforms:label']
+
+                form_struct[clean_ref]['label'] = ref_label
+
+            if 'http://www.w3.org/2002/xforms:item' in cur_node:
+                form_struct[clean_ref]['options'] = []
+                for item_ in cur_node['http://www.w3.org/2002/xforms:item']:
+                    if 'http://www.w3.org/2002/xforms:output' in item_['http://www.w3.org/2002/xforms:label']:
+                        choice_label = item_['http://www.w3.org/2002/xforms:label']['http://www.w3.org/2002/xforms:output']['#text']
+                    else:
+                        choice_label = item_['http://www.w3.org/2002/xforms:label']
+
+                    if settings.IS_NUMERICAL_CHOICES_CODES:
+                        form_struct['_all_choices']['%s__%s' % (clean_ref, item_['http://www.w3.org/2002/xforms:value'])] = choice_label
+                    else:
+                        choice_key = item_['http://www.w3.org/2002/xforms:value']
+                        # we assume and overide existing choices
+                        form_struct['_all_choices'][choice_key] = choice_label
+
+
+            # check if we have other stuff in this node
+            for attr_key, attr_val in self.node_attrs.items():
+                if attr_val in cur_node:
+                    form_struct = self.process_form_node(attr_key, cur_node[attr_val], form_struct)
+
+        return form_struct
 
     def clean_json_key(self, j_key):
         # given a key from ona with data, get the sane(last) part of the key
         m = re.findall("/?([\.\w\-]+)$", j_key)
         return m[0]
 
+    def save_form_dictionary(self, form_struct, form_id):
+        not_defined = []
+        for node_key, node_ in form_struct.items():
+            if node_key == '_all_choices':
+                continue
+            elif node_['type'] in self.ignored_qtypes:
+                continue
+            elif 'label' not in node_:
+                not_defined.append(node_key)
+            else:
+                # print(node_['label'])
+                dict_item = DictionaryItems(
+                    form_group=form_id,             # using formid in ODK central since forms are unique
+                    parent_node=None,               # for selects
+                    t_key=node_key,
+                    t_locale='en',                  # assuming English for now
+                    t_type=node_['type'],
+                    t_value=node_['label']
+                )
+                dict_item.full_clean()
+                dict_item.save()
+
+
+        for key_, label_ in form_struct['_all_choices'].items():
+            # print('\t%s -- %s' % (key_, label_))
+            dict_option = DictionaryItems(
+                form_group=form_id,             # using formid in ODK central since forms are unique
+                parent_node=None,               # for selects
+                t_key=key_,
+                t_locale='en',                  # assuming English for now
+                t_type='option',
+                t_value=label_
+            )
+            dict_option.full_clean()
+            dict_option.save()
 
 
 
