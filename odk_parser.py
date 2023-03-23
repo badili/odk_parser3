@@ -27,6 +27,7 @@ from requests.exceptions import ConnectionError
 from django.http import HttpRequest
 
 from .terminal_output import Terminal
+from .common_tasks import ProgressBar
 from .excel_writer import ExcelWriter
 if settings.SITE_NAME == 'Pazuri Records':
     from .models import RawSubmissions, FormViews, ViewsData, ViewTablesLookup, DictionaryItems, FormMappings, ProcessingErrors, ODKFormGroup, SystemSettings
@@ -198,7 +199,7 @@ class OdkParser():
         try:
             url = "%s/%s" % (self.ona_url, self.api_all_forms)
             all_forms = self.process_curl_request(url)
-            terminal.tprint(json.dumps(all_forms), 'fail')
+            # terminal.tprint(json.dumps(all_forms), 'fail')
             if all_forms is None:
                 if settings.DEBUG: print(("Error while executing the API request %s" % url))
                 return
@@ -344,7 +345,7 @@ class OdkParser():
 
 
                 if settings.ODK_SERVER == 'onadata':
-                    if settings.IS_DRY_RUN:
+                    if settings.IS_DRY_RUN == True:
                         url = "%s/%s%s.json?start=1&limit=5&sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
                     else:
                         url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
@@ -358,13 +359,12 @@ class OdkParser():
 
                     submission_uuids = []
 
-
-                if settings.IS_DRY_RUN:
-                    subm_count = 0
+                subm_count = 0
+                if settings.DEBUG: progress_bar = ProgressBar()
                 for uuid in submission_uuids:
                     # obey the debug setting
-                    if settings.IS_DRY_RUN:
-                        subm_count = subm_count + 1
+                    subm_count = subm_count + 1
+                    if settings.IS_DRY_RUN == True:
                         if subm_count > settings.DRY_RUN_RECORDS:
                             if settings.DEBUG: terminal.tprint("\tWe have downloaded our maximum number of submissions under dry ran settings", 'info')
                             break
@@ -395,10 +395,13 @@ class OdkParser():
                         # terminal.tprint("The current submission is already saved, implying that all submissions have been processed, so stop the processing!", 'okblue')
                         continue
 
+                    if settings.DEBUG: progress_bar.progress(subm_count, len(submission_uuids), 'saved')
+
+                if settings.DEBUG: print('')    # empty line to preserve the progress bar
                 # just check if all is now ok
                 submissions = RawSubmissions.objects.filter(form_id=odk_form.id).order_by('submission_time').values('raw_data')
                 if submissions.count() != submitted_instances:
-                    if settings.IS_DRY_RUN:
+                    if settings.IS_DRY_RUN == True:
                         terminal.tprint("\tThe system is under development, no need to confirm number of counts", 'debug')
                     else:
                         # ok, still the processing is not complete... shout!
@@ -1049,7 +1052,11 @@ class OdkParser():
                         form_group = ODKFormGroup.objects.get(id=cur_form.form_group_id)
 
                         # get all the form ids belonging to the same group
-                        temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id)
+                        if settings.SITE_NAME == 'Pazuri Records':
+                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id, farm_id=self.cur_farm_id)
+                        else:
+                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id)
+                        
                         for t_form in temp_forms:
                             associated_forms.append(t_form.form_id)
                         form_name = form_group.group_name
@@ -1086,6 +1093,7 @@ class OdkParser():
             self.output_structure = { 'main': ['unique_id'] + settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else [] }
             self.indexes['main'] = 1
 
+            print(json.dumps(associated_forms))
             for form_id in associated_forms:
                 try:
                     if submission_filters is not None:
@@ -1228,7 +1236,7 @@ class OdkParser():
         for data in submissions_list:
             if is_dry_run:
                 i = i + 1
-                if i > settings.DRY_RUN_RECORDS:
+                if settings.IS_DRY_RUN and i > settings.DRY_RUN_RECORDS:
                     terminal.tprint("\tWe have processed the maximum number of submissions (%d) under dry ran settings" % i, 'okblue')
                     break
             # data, csv_files = self.post_data_processing(data)
@@ -1523,8 +1531,8 @@ class OdkParser():
         """
         Create and execute a curl request
         """        
-        terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
-        terminal.tprint("\tProcessing API request %s" % url, 'okblue')
+        # terminal.tprint("\Token %s" % self.ona_api_token, 'ok')
+        # terminal.tprint("\tProcessing API request %s" % url, 'okblue')
         try:
             headers = {'Authorization': "Token %s" % self.ona_api_token}
             r = requests.get(url, headers=headers)
