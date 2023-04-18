@@ -76,14 +76,17 @@ class OdkParser():
         self.form_rep = 'api/v1/forms/'
         self.media = 'api/v1/media'
 
-        if ona_token is None:
-            # load the global ona settings
-            self.load_ona_settings()
+        if not hasattr(settings, 'ODK_SERVER') or (hasattr(settings, 'ODK_SERVER') and settings.ODK_SERVER == 'onadata'):
+            if ona_token is None:
+                # load the global ona settings
+                self.load_ona_settings()
+            else:
+                self.ona_user = ona_user
+                self.ona_password = ona_password
+                self.ona_api_token = ona_token
+                self.ona_url = settings.ONADATA_URL
         else:
-            self.ona_user = ona_user
-            self.ona_password = ona_password
-            self.ona_api_token = ona_token
-            self.ona_url = settings.ONADATA_URL
+            print('Processing data from ODK central')
 
         if settings.SITE_NAME == 'Pazuri Records':
             self.cur_farm_id = farm_id

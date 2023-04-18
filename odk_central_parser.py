@@ -138,6 +138,8 @@ class OdkCentral():
             xml_url = self.fetch_single_xml_submission % {'url': self.server_url, 'project_id': project_id, 'form_name': form_name, 'uuid': subm['instanceId']}
             response = self.process_curl_request(xml_url, True)
             raw_xml = response.content.decode('utf-8')
+            # print(raw_xml)
+            # terminal.tprint(json.dumps(xmltodict.parse(raw_xml, process_namespaces=True, namespaces={'http://opendatakit.org/submissions': None})), 'fail')    
 
             try:
                 # skip if this submission is already saved
@@ -151,7 +153,7 @@ class OdkCentral():
                     is_processed=0,
                     is_modified=0,
                     submission_time=subm['createdAt'],
-                    raw_data=xmltodict.parse(raw_xml, process_namespaces=True)['data']
+                    raw_data=xmltodict.parse(raw_xml, process_namespaces=True, namespaces={'http://opendatakit.org/submissions': None})['data']
                 )
                 t_submission.full_clean()
                 t_submission.save()
