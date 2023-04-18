@@ -31,6 +31,7 @@ class Onadata():
         self.initiate_paswd_reset = 'api/v1/user/reset_url'
         self.finalize_paswd_reset = 'api/v1/user/reset'
         self.share_url = 'api/v1/forms/%d/share'
+        self.project_share_url = 'api/v1/projects/%d/share'
         self.user = 'api/v1/user'
         self.project_forms = 'api/v1/projects/%d/forms'
         self.change_password = 'api/v1/profiles/%s/change_password'
@@ -365,4 +366,39 @@ class Onadata():
             if settings.DEBUG: print((traceback.format_exc()))
             sentry.captureException()
             raise Exception('There was an error while getting the user token')
+
+    def remove_user_from_project(self, project_url, username, role, api_token):
+        try:
+            url = '%s/share' % project_url
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            payload = {'username': username, 'role': role, 'remove': True}
+            print("Deleting the user '%s' via '%s'" % (username, url))
+
+            r = requests.put(url, data=payload, headers=xls_headers)
+            if r.status_code != 204:
+                print(r.json())
+                raise Exception("There was an error while deleting the user '%s'" % username)
+
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while deleting a user from the project')
+
+    def delete_project(self, project_url, api_token):
+        try:
+            url = project_url
+            xls_headers = {'Authorization': "Token %s" % api_token}
+            print("Deleting the project '%s'" % url)
+
+            r = requests.delete(url, headers=xls_headers)
+            if r.status_code != 204:
+                print(r.json())
+                raise Exception("There was an error while deleting the project '%s'" % url)
+
+        except Exception as e:
+            if settings.DEBUG: print((traceback.format_exc()))
+            sentry.captureException()
+            raise Exception('There was an error while deleting a user from the project')
+
+
 
