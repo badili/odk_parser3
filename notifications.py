@@ -32,9 +32,9 @@ try:
         from .odk_choices_parser import ImportODKChoices
     elif settings.SITE_NAME == 'Pazuri Records':
         # try importing stuff from PazuriPoultry
-        from vendor.terminal_output import Terminal
+        from common_func.terminal_output import Terminal
         from poultry.models import SMSQueue, MessageTemplates, Campaign, Personnel, Farm, SubscriptionPayment, Batch, Production, EventsSchedule, EventsList, OtherEvents, Farm, IncomeExpense, PERSONNEL_DESIGNATION_CHOICES
-        from poultry.common_tasks import Emails
+        from common_func.common_tasks import Emails
     elif settings.SITE_NAME == 'BoxGirls M&E System':
         from vendor.terminal_output import Terminal
         from me_app.common_tasks import Emails
