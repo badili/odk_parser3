@@ -85,7 +85,7 @@ class Onadata():
         if settings.DEBUG: print('Registering a new organization')
         # requires admin privileges
         try:
-            url = '%s%s' % (self.server, 'api/v1/projects')
+            url = '%s/%s' % (self.server, 'api/v1/projects')
             xls_headers = {'Authorization': "Token %s" % api_token}
             r = requests.post(url, org_details, headers=xls_headers)
             if settings.DEBUG: print(r.json())
@@ -105,7 +105,7 @@ class Onadata():
         """
         if settings.DEBUG: print('Registering a new project')
         try:
-            url = '%s%s' % (self.server, 'api/v1/projects')
+            url = '%s/%s' % (self.server, 'api/v1/projects')
             xls_headers = {'Authorization': "Token %s" % api_token}
             r = requests.post(url, project_details, headers=xls_headers)
             if settings.DEBUG: print(r.json())
