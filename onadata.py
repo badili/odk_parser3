@@ -368,18 +368,24 @@ class Onadata():
             raise Exception('There was an error while getting the user token')
 
     def remove_user_from_project(self, project_url, username, role, api_token):
+        # the username being deleted must be in lower case
         try:
+            username = username.lower()
             url = '%s/share' % project_url
             xls_headers = {'Authorization': "Token %s" % api_token}
             payload = {'username': username, 'role': role, 'remove': True}
             print("Deleting the user '%s' via '%s'" % (username, url))
 
             r = requests.put(url, data=payload, headers=xls_headers)
-            if r.status_code != 204:
+            if r.status_code == 204: pass
+            elif r.status_code == 404:
+                if settings.DEBUG: terminal.tprint("The user '%s' was not found in the project. Perhaps the user was deleted" % username, 'info')
+            else:
                 print(r.json())
                 raise Exception("There was an error while deleting the user '%s'" % username)
 
         except Exception as e:
+            print(str(e))
             if settings.DEBUG: print((traceback.format_exc()))
             sentry.captureException()
             raise Exception('There was an error while deleting a user from the project')
@@ -391,7 +397,11 @@ class Onadata():
             print("Deleting the project '%s'" % url)
 
             r = requests.delete(url, headers=xls_headers)
-            if r.status_code != 204:
+            
+            if r.status_code == 204: pass
+            elif r.status_code == 404:
+                if settings.DEBUG: terminal.tprint("The project '%s' was not found. Perhaps it was deleted" % url, 'info')
+            else:
                 print(r.json())
                 raise Exception("There was an error while deleting the project '%s'" % url)
 
