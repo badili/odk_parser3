@@ -353,6 +353,7 @@ class OdkParser():
                     else:
                         url = "%s/%s%s.json?sort=%s" % (self.ona_url, self.form_data, str(form_id), '{"_submission_time":-1}')
                     submission_uuids = self.process_curl_request(url)
+                    if submission_uuids is None: submission_uuids = []
                 elif settings.ODK_SERVER == 'odk_central':
                     # need to improve this section.....
                     # from .odk_central_parser import OdkCentral
@@ -387,7 +388,7 @@ class OdkParser():
                             form_id=odk_form.id,
                             # it seems some submissions don't have a uuid returned with the submission. Use our previous uuid
                             uuid=uuid['_uuid'],
-                            duration=0 if uuid['_duration'] == '' else uuid['_duration'],
+                            duration=0 if uuid['_duration'] == '' or uuid['_duration'] < 0 else uuid['_duration'],
                             instance_id=uuid['_id'],
                             submission_time=submission['_submission_time'],
                             raw_data=submission

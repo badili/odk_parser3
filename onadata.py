@@ -139,7 +139,7 @@ class Onadata():
                 if settings.DEBUG: print(list(map(z, form_prefixes)))
                 if len(list(filter(None, map(z, form_prefixes)))) == 0: continue            # the form is not in our list
 
-                # if settings.DEBUG: print("Updating %s" % form['id_string'])
+                if settings.DEBUG: print("Updating %s" % form['id_string'])
                 # we are updating this form
                 # we might need to delete the existing metadata
                 # print("\n\nupdating %s %s" % (form['id_string'], resource_name))
@@ -208,7 +208,6 @@ class Onadata():
                 raise Exception(r.text)
 
             # we are good, password reset successfully
-
         except Exception as e:
             if settings.DEBUG: terminal.tprint(str(e), 'fail')
             sentry.captureException()
