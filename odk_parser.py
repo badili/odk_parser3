@@ -435,7 +435,7 @@ class OdkParser():
                 return None
 
             if stats is None:
-                logger.error("Error while fetching the number of submissions")
+                # logger.error("Error while fetching the number of submissions")
                 return None
 
             submissions_count = 0
