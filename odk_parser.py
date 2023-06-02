@@ -1199,7 +1199,7 @@ class OdkParser():
 
         if submissions_list is None or submissions_list.count() == 0:
             if settings.DEBUG: terminal.tprint("The form with id '%s' has no submissions returning as such" % str(form_id), 'fail')
-            return None
+            return None, None
 
         try:
             # get the form metadata
