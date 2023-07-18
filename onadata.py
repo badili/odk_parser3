@@ -85,11 +85,15 @@ class Onadata():
         if settings.DEBUG: print('Registering a new organization')
         # requires admin privileges
         try:
+            print(self.server)
             url = '%s/%s' % (self.server, 'api/v1/projects')
             xls_headers = {'Authorization': "Token %s" % api_token}
             r = requests.post(url, org_details, headers=xls_headers)
-            if settings.DEBUG: print(r.json())
-            if r.status_code == 201:
+            
+            if r.status_code == 404:
+                raise Exception("There was an error while registering a new organization. The url '%s' wasnt found" % url)
+            elif r.status_code == 201:
+                if settings.DEBUG: print(r.json())
                 return r.json()
             else:
                 terminal.tprint("Response %d: %s" % (r.status_code, r.text), 'fail')
