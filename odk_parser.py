@@ -209,10 +209,11 @@ class OdkParser():
         except ConnectionError as e:
             terminal.tprint("We don't have a connection to the ONA server, revert to the saved forms..", 'debug')
             sentry.captureMessage("I cannot connect to the ONA server. I will revert to the saved forms", level='warning', extra={'messasge': str(e)})
-            saved_forms = ODKForm.objects.all()
+            saved_forms = ODKForm.objects.filter(is_active=True).all()
             for form in saved_forms:
                 to_return.append({'title': form.form_name, 'id': form.form_id, 'full_id': form.full_form_id})
             return to_return
+
         except Exception as e:
             if settings.DEBUG: print(e)
             # sentry.captureException()
@@ -232,14 +233,24 @@ class OdkParser():
                 #     saved_form = ODKForm.objects.get(full_form_id=form['id_string'])
 
                 saved_form = ODKForm.objects.get(form_id=form['formid'])
-                terminal.tprint("The form '%s' is already saved in the database" % saved_form.form_name, 'ok')
+
+                # if the form is not active and the number of saved submissions is equal to the online submissions, omit the form
+                is_fully_processed = True if form['downloadable'] == False and saved_form.no_submissions == form['num_of_submissions'] else False
+                
+                terminal.tprint("The form '%s' (%s) is already saved in the database" % (saved_form.form_name, form['downloadable']), 'ok')
+                if saved_form.is_active != form['downloadable']:
+                    saved_form.is_active = form['downloadable']
+
                 if saved_form.no_submissions != form['num_of_submissions']:
                     saved_form.no_submissions = form['num_of_submissions']
                     saved_form.latest_upload = form['last_updated_at']
                     saved_form.datetime_published = datetime.strptime(form['date_created'], '%Y-%m-%dT%H:%M:%S.%f%z')
-                    saved_form.save()
                 
-                to_return.append({'title': saved_form.form_name, 'id': saved_form.form_id, 'full_id': saved_form.full_form_id})
+                saved_form.save()
+                
+                if is_fully_processed == False:
+                    to_return.append({'title': saved_form.form_name, 'id': saved_form.form_id, 'full_id': saved_form.full_form_id})
+
             except ODKForm.DoesNotExist as e:
                 # this form is not saved in the database, so save it
                 terminal.tprint("The form '%s' is not in the database, saving it" % form['id_string'], 'debug')
@@ -1057,9 +1068,9 @@ class OdkParser():
 
                         # get all the form ids belonging to the same group
                         if settings.SITE_NAME == 'Pazuri Records':
-                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id, farm_id=self.cur_farm_id)
+                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id, farm_id=self.cur_farm_id, is_active=True)
                         else:
-                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id)
+                            temp_forms = ODKForm.objects.filter(form_group_id=cur_form.form_group_id, is_active=True)
                         
                         for t_form in temp_forms:
                             associated_forms.append(t_form.form_id)
@@ -1175,7 +1186,6 @@ class OdkParser():
         df.to_excel(output_name)
 
         return output_name
-
 
     def get_form_submissions_as_json(self, form_id, screen_nodes, uuids=None, update_local_data=True, is_dry_run=True, submission_filters=None):
         """Given a form id get the form submissions
