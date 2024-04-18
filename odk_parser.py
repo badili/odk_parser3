@@ -96,19 +96,9 @@ class OdkParser():
 
         # save the cleaners for later user
         # @todo Save as database settings
-        self.cleaners = {
-            'c1s1q8_Country_name': {
-                '^sundan|sudan': 'Sudan',
-                '^b.*nin|ben': 'Benin',
-                '254$': 'Kenya',
-                '243$': 'D. R. Congo',
-                '^madag': 'Madagascar',
-                '233$': 'Ghana',
-                '251$': 'Ethiopia',
-                '20$': 'Egypt',
-                '258$': 'Mozambique'
-            }
-        }
+        # these will be replaced by cleaners if defined in a data_cleaners fil
+        self.cleaners = { }
+        self.redact_data = True
 
     def load_ona_settings(self):
         # if the ona settings have been saved, load them here for later use
@@ -1091,6 +1081,11 @@ class OdkParser():
                 associated_forms.append(form_id)
                 form_name = cur_form.form_name
 
+            # check if we need to celan the data
+            if self.redact_data and hasattr(settings, 'DATA_CLEANERS'):
+                re_check = re.compile("(?=(" + "|".join(map(re.escape, settings.DATA_CLEANERS.keys())) + "))")
+                re_res = re_check.findall(cur_form.full_form_id)
+                self.cleaners = settings.DATA_CLEANERS[re_res[0]] if len(re_res) else None
 
             # having all the associated form ids, fetch the required data
             all_submissions = []
@@ -1356,7 +1351,8 @@ class OdkParser():
 
             # Check whether there is need to clean the data. If there is need, clean it automatically
             if clean_key in self.cleaners:
-                value = self.get_clean_data_value(self.cleaners[clean_key], value)
+                # value = self.get_clean_data_value(self.cleaners[clean_key], value, clean_key)
+                value = re.sub(self.cleaners[clean_key]['find'], self.cleaners[clean_key]['replacer'], value)
 
             is_json = None
 
@@ -1492,7 +1488,8 @@ class OdkParser():
 
         # the sheet name is where to put this subset of data
         if sheet_name not in self.output_structure:
-            self.output_structure[sheet_name] = ['unique_id', 'top_id', 'parent_id'] + settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else []
+            add_cols = settings.ADD_MAIN_COLS if hasattr(settings, 'ADD_MAIN_COLS') else []
+            self.output_structure[sheet_name] = ['unique_id', 'top_id', 'parent_id'] + add_cols
             self.indexes[sheet_name] = 1
 
         cur_list = []
@@ -1528,18 +1525,24 @@ class OdkParser():
         m = re.findall("/?([\.\w\-]+)$", j_key)
         return m[0]
 
-    def get_clean_data_value(self, cleaners, code):
+    def get_clean_data_value(self, cleaner, cur_value, cleaned_field=None):
         try:
-            for c_code, country in six.iteritems(cleaners):
-                if re.search(c_code, code, re.IGNORECASE) is not None:
-                    return country
+            # our cleaner are in the form of regexes
+            cleaned_val = re.sub(cleaner['find'], cleaner['replacer'], cur_value)
+            return cleaned_val
 
-            # Found nothing, return original code
-            return code
+            if cleaned_field == 'c1s1q8_Country_name':
+                # we are cleaning the country names
+                for c_code, country in six.iteritems(cleaner):
+                    if re.search(c_code, cur_value, re.IGNORECASE) is not None:
+                        return country
+
+            # Found nothing, return original cur_value
+            return cur_value
         except Exception as e:
             terminal.tprint(str(e), 'fail')
             sentry.captureException()
-            return code
+            return cur_value
 
     def process_curl_request(self, url):
         """
