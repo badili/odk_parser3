@@ -138,8 +138,9 @@ class ExcelWriter():
             fields.remove('top_id')
             fields.insert(0, 'top_id')
 
-        fields.remove('unique_id')
-        fields.insert(0, 'unique_id')
+        if 'unique_id' in fields:
+            fields.remove('unique_id')
+            fields.insert(0, 'unique_id')
 
         return fields
 
